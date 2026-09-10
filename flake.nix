@@ -92,6 +92,18 @@
             # toolchain. A `store-dir` line in .npmrc does NOT work here
             # (`pnpm config get store-dir` stays undefined), which is why there
             # is no .npmrc in this repo.
+            #
+            # That second half is also a hazard, because the variable is
+            # inherited by every child process. `dsh plugin add` runs pnpm, and
+            # pnpm records the store it used in the target profile's
+            # node_modules/.modules.yaml — so running the install command below
+            # from THIS shell writes a store path under this checkout into
+            # ~/.dsh/profiles/<name>. pnpm 11 then refuses every later install
+            # and update in that profile (ERR_PNPM_UNEXPECTED_STORE, and
+            # [ERR_SQLITE_ERROR] once the store directory is gone), which is the
+            # one failure the market cannot repair from inside the app. The
+            # `dsh` wrapper below strips the variable at that boundary again;
+            # see §0.3 E21.
             shellHook = ''
               export PNPM_HOME="$PWD/.pnpm"
               export PATH="$PNPM_HOME:$PATH"
@@ -99,6 +111,19 @@
               # `dsh plugin add <abs-path>` links this checkout into a profile;
               # DSH_HOME is where those profiles live.
               export DSH_HOME="''${DSH_HOME:-$HOME/.dsh}"
+
+              # pnpm must never see PNPM_HOME when dsh is the one driving it.
+              # `type -P` looks past this function to the real executable.
+              dsh() {
+                local dsh_bin
+                dsh_bin=$(type -P dsh) || dsh_bin=
+                if [ -n "$dsh_bin" ]; then
+                  env -u PNPM_HOME "$dsh_bin" "$@"
+                else
+                  printf 'dsh: not found on PATH\n' >&2
+                  return 127
+                fi
+              }
 
               cat <<'BANNER'
               ── hana-theme-for-dsh ─────────────────────────────────────────────
@@ -113,6 +138,9 @@
 
                 dsh plugin --profile web add "link:$PWD"    install (desktop is app-owned)
                 dsh plugin --profile web remove hana-theme-for-dsh
+
+                the dsh wrapper above drops PNPM_HOME, so the profile keeps the
+                global pnpm store instead of one inside this checkout (§0.3 E21)
               ───────────────────────────────────────────────────────────────────
               BANNER
             '';
