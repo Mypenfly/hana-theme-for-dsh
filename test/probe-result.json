@@ -1,0 +1,393 @@
+{
+  "probedAt": "2026-09-10T12:06:33.686Z",
+  "url": "http://127.0.0.1:<port>/ (local DSH Desktop page)",
+  "theme": {
+    "bodyHanaValue": "paper",
+    "bodyHasSerifClass": true,
+    "darkModeAttr": false
+  },
+  "markdownRootCount": 51,
+  "markdownRoots": [
+    {
+      "cls": "_markdown_177e0_5",
+      "ownerFlowKind": "assistant-step",
+      "tag": "DIV",
+      "textLength": 3528
+    },
+    {
+      "cls": "_markdown_177e0_5",
+      "ownerFlowKind": "assistant-step",
+      "tag": "DIV",
+      "textLength": 131
+    },
+    {
+      "cls": "_markdown_177e0_5",
+      "ownerFlowKind": "assistant-step",
+      "tag": "DIV",
+      "textLength": 140
+    },
+    {
+      "cls": "_markdown_177e0_5",
+      "ownerFlowKind": "assistant-step",
+      "tag": "DIV",
+      "textLength": 188
+    },
+    {
+      "cls": "_markdown_177e0_5",
+      "ownerFlowKind": "assistant-step",
+      "tag": "DIV",
+      "textLength": 102
+    },
+    {
+      "cls": "_markdown_177e0_5",
+      "ownerFlowKind": "assistant-step",
+      "tag": "DIV",
+      "textLength": 71
+    }
+  ],
+  "codeBlockFound": true,
+  "chosenMarkdownRoot": "_markdown_177e0_5",
+  "markdownAncestorChain": [
+    {
+      "tag": "DIV",
+      "cls": "_markdown_177e0_5",
+      "attrs": {}
+    },
+    {
+      "tag": "DIV",
+      "cls": "IS3SeW_body",
+      "attrs": {}
+    },
+    {
+      "tag": "DIV",
+      "cls": "IS3SeW_root",
+      "attrs": {}
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "attrs": {
+        "data-slot": "conversation.chat.node"
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "V0s2hW_flowItem",
+      "attrs": {
+        "data-chat-anchor-key": "14:assistant-step5:122",
+        "data-chat-flow-key": "14:assistant-step5:122",
+        "data-chat-flow-kind": "assistant-step",
+        "data-chat-turn": "5"
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "V0s2hW_column",
+      "attrs": {
+        "data-chat-flow": ""
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "V0s2hW_scroll",
+      "attrs": {}
+    },
+    {
+      "tag": "DIV",
+      "cls": "V0s2hW_root",
+      "attrs": {}
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "attrs": {
+        "data-slot": "conversation.view"
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "uPhUma_viewArea",
+      "attrs": {}
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "attrs": {
+        "data-slot": "conversation.session"
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "uPhUma_scrollBody",
+      "attrs": {
+        "data-conversation-scroll": ""
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "uPhUma_body",
+      "attrs": {}
+    },
+    {
+      "tag": "DIV",
+      "cls": "uPhUma_root",
+      "attrs": {
+        "data-phase": "active"
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "attrs": {
+        "data-slot": "conversation"
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "_1qAH1q_centerCol",
+      "attrs": {}
+    },
+    {
+      "tag": "DIV",
+      "cls": "_1qAH1q_frame",
+      "attrs": {
+        "data-details-collapsed": "true"
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "attrs": {
+        "data-slot": "root"
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "attrs": {
+        "id": "root"
+      }
+    },
+    {
+      "tag": "BODY",
+      "cls": "hana-serif",
+      "attrs": {
+        "data-hana-theme": "paper"
+      }
+    },
+    {
+      "tag": "HTML",
+      "cls": "",
+      "attrs": {}
+    }
+  ],
+  "codeBlockAncestorChain": [
+    {
+      "tag": "DIV",
+      "cls": "_block_5swpp_4 md-code-block",
+      "attrs": {}
+    },
+    {
+      "tag": "DIV",
+      "cls": "_markdown_177e0_5",
+      "attrs": {}
+    },
+    {
+      "tag": "DIV",
+      "cls": "IS3SeW_body",
+      "attrs": {}
+    },
+    {
+      "tag": "DIV",
+      "cls": "IS3SeW_root",
+      "attrs": {}
+    },
+    {
+      "tag": "DIV",
+      "cls": "",
+      "attrs": {
+        "data-slot": "conversation.chat.node"
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "V0s2hW_flowItem",
+      "attrs": {
+        "data-chat-anchor-key": "14:assistant-step5:122",
+        "data-chat-flow-key": "14:assistant-step5:122",
+        "data-chat-flow-kind": "assistant-step",
+        "data-chat-turn": "5"
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "V0s2hW_column",
+      "attrs": {
+        "data-chat-flow": ""
+      }
+    },
+    {
+      "tag": "DIV",
+      "cls": "V0s2hW_scroll",
+      "attrs": {}
+    }
+  ],
+  "markdownNearestFlowKind": "assistant-step",
+  "assistantStepCount": 72,
+  "assistantSteps": [
+    {
+      "cls": "V0s2hW_flowItem",
+      "childCount": 1,
+      "children": [
+        {
+          "tag": "DIV",
+          "cls": "",
+          "attrs": {
+            "data-slot": "conversation.chat.node"
+          }
+        }
+      ],
+      "textLength": 140,
+      "containsMarkdown": false,
+      "containsCodeBlock": false
+    },
+    {
+      "cls": "V0s2hW_flowItem",
+      "childCount": 1,
+      "children": [
+        {
+          "tag": "DIV",
+          "cls": "",
+          "attrs": {
+            "data-slot": "conversation.chat.node"
+          }
+        }
+      ],
+      "textLength": 3595,
+      "containsMarkdown": true,
+      "containsCodeBlock": true
+    },
+    {
+      "cls": "V0s2hW_flowItem",
+      "childCount": 1,
+      "children": [
+        {
+          "tag": "DIV",
+          "cls": "",
+          "attrs": {
+            "data-slot": "conversation.chat.node"
+          }
+        }
+      ],
+      "textLength": 196,
+      "containsMarkdown": true,
+      "containsCodeBlock": false
+    },
+    {
+      "cls": "V0s2hW_flowItem",
+      "childCount": 1,
+      "children": [
+        {
+          "tag": "DIV",
+          "cls": "",
+          "attrs": {
+            "data-slot": "conversation.chat.node"
+          }
+        }
+      ],
+      "textLength": 166,
+      "containsMarkdown": true,
+      "containsCodeBlock": false
+    }
+  ],
+  "flowKindInventory": {
+    "turn-process": {
+      "count": 6,
+      "withMarkdown": 0,
+      "withParagraph": 0,
+      "withCode": 0
+    },
+    "assistant-step": {
+      "count": 72,
+      "withMarkdown": 51,
+      "withParagraph": 51,
+      "withCode": 6
+    },
+    "tool-call": {
+      "count": 86,
+      "withMarkdown": 0,
+      "withParagraph": 0,
+      "withCode": 0
+    },
+    "turn-tail": {
+      "count": 5,
+      "withMarkdown": 0,
+      "withParagraph": 0,
+      "withCode": 0
+    },
+    "user": {
+      "count": 4,
+      "withMarkdown": 0,
+      "withParagraph": 0,
+      "withCode": 0
+    },
+    "system-prompt": {
+      "count": 2,
+      "withMarkdown": 0,
+      "withParagraph": 0,
+      "withCode": 0
+    },
+    "context": {
+      "count": 2,
+      "withMarkdown": 0,
+      "withParagraph": 0,
+      "withCode": 0
+    }
+  },
+  "markdownTypography": {
+    "fontFamily": "Georgia, \"Times New Roman\", \"Source Han Serif SC\", \"Noto Serif CJK SC\", \"Songti SC\", STSong, \"Noto Serif\", SimSun, serif",
+    "fontSize": "20.4px",
+    "lineHeight": "32.4px"
+  },
+  "ancestorTypography": [
+    {
+      "depth": 0,
+      "fontSize": "17px",
+      "lineHeight": "27px"
+    },
+    {
+      "depth": 1,
+      "fontSize": "17px",
+      "lineHeight": "27px"
+    },
+    {
+      "depth": 2,
+      "fontSize": "16px",
+      "lineHeight": "normal"
+    },
+    {
+      "depth": 3,
+      "fontSize": "16px",
+      "lineHeight": "normal"
+    },
+    {
+      "depth": 4,
+      "fontSize": "16px",
+      "lineHeight": "normal"
+    },
+    {
+      "depth": 5,
+      "fontSize": "16px",
+      "lineHeight": "normal"
+    }
+  ],
+  "tokens": {
+    "--dsh-content-font-size": "17px",
+    "--hana-serif-scale": "1.2",
+    "--dsw-font-markdown-base": "calc(17px * 1.2) /\n    calc((24px + calc(17px - 14px)) * 1.2)\n    Georgia, 'Times New Roman', 'Source Han Serif SC',\n    'Noto Serif CJK SC', 'Songti SC', 'STSong', 'Noto Serif', 'SimSun', serif",
+    "--dsw-alias-bg-base": "#F5EFE4",
+    "--dsw-alias-link": "",
+    "--dsw-alias-bg-primary": "",
+    "--dsw-alias-separator-primary": ""
+  }
+}

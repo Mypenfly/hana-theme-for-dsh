@@ -1,0 +1,24 @@
+# Reference clones used while researching the community themes and HanaAgent.
+# Roughly 230 MB, and deliberately excluded from the Nix flake source so that
+# `nix develop` / `nix flake check` do not copy it into the store on every run.
+.research/
+
+# Nix
+result
+result-*
+.nix-cache/
+
+# pnpm (both are redirected into the tree by the dev shell)
+.pnpm/
+.pnpm-store/
+node_modules/
+
+*.log
+
+# Uncompressed screenshot originals. `assets/` holds the q92 WebP derivatives
+# that the READMEs reference; these PNGs are 10 MB and add nothing.
+assests/
+
+# Local diagnostic dumps (a one-off view of THIS machine's settings surface,
+# not something a published theme should ship).
+test/settings-probe.json

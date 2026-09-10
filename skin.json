@@ -1,0 +1,61 @@
+{
+  "id": "hana",
+  "name": "花笺 · 纸本手抄",
+  "nameEn": "Hanakami · Paper Manuscript",
+  "author": "hana-theme-for-dsh contributors",
+  "tagline": "暖纸底 · 墨色文字 · 印章青蓝 · 衬线阅读排版",
+  "description": "移植自 HanaAgent 设计语言的 DSH 主题。以宣纸暖底承载五档墨色文字，以唯一一枚印章青蓝作为强调色，正文使用衬线体阅读排版，界面骨架保持无衬线以免喧宾夺主。四套配色：纸本 / 青夜 取自 HanaAgent 的 new-warm-paper 与 midnight（克制）；珊瑚 / 斑斓 取自它自己的 coral 与 midnight-contrast（丰富）——后者把饱和度放在边框、底纹与纸面里，正文始终是墨色，因此鲜艳而不失可读。HanaAgent 原调色板在 9 处不达 WCAG AA，本主题保持色相与饱和度、仅微调明度全部达标，断言写在 test/contrast.test.js 里。",
+  "tags": [
+    "hana",
+    "paper",
+    "serif",
+    "ink",
+    "warm",
+    "light",
+    "minimal",
+    "reading"
+  ],
+  "accent": "#537D96",
+  "bodyAttr": "data-hana-theme",
+  "package": "hana-theme-for-dsh",
+  "wiring": {
+    "id": "ui-skin-hana",
+    "bundleWired": true
+  },
+  "themes": [
+    {
+      "id": "hana-paper",
+      "name": "花笺 · 纸本",
+      "colorScheme": "light",
+      "accent": "#537D96"
+    },
+    {
+      "id": "hana-midnight",
+      "name": "花笺 · 青夜",
+      "colorScheme": "dark",
+      "accent": "#C99AAF"
+    },
+    {
+      "id": "hana-coral",
+      "name": "花笺 · 珊瑚",
+      "colorScheme": "light",
+      "accent": "#F37E63"
+    },
+    {
+      "id": "hana-midnight-vivid",
+      "name": "花笺 · 斑斓",
+      "colorScheme": "dark",
+      "accent": "#E6B1C4"
+    }
+  ],
+  "tokens": {
+    "count": 89,
+    "light": "#F5EFE4",
+    "dark": "#3B4A54"
+  },
+  "order": 20,
+  "preview": {
+    "light": "assets/paper.webp",
+    "dark": "assets/midnight.webp"
+  }
+}

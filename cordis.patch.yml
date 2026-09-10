@@ -1,0 +1,26 @@
+# hana-theme-for-dsh — bundle patch layer
+#
+# This file is the `dsh.bundle.patch` layer of the package. When the plugin is
+# installed through the official CLI —
+#
+#   dsh plugin --profile desktop add /path/to/hana-theme-for-dsh
+#   dsh plugin --profile desktop add github:<owner>/hana-theme-for-dsh
+#
+# — the command reconciles `dsh.profile.bundles` against the installed packages
+# and, seeing this declaration, appends `hana-theme-for-dsh` to the bundle
+# stack. Profile boot then merges THIS patch (a single `insert` of the plugin
+# row) exactly like a manual mount line in the profile's own cordis.patch.yml,
+# so no profile file has to be edited by hand. The same row is the roster entry
+# the web-modules half scans to find the client bundle
+# (exports["./client"] -> lib/client.js).
+#
+# `id` is the row identity used by profile patches to disable or reconfigure the
+# plugin without uninstalling it — e.g. a user who wants it installed but idle
+# adds this to ~/.dsh/profiles/<profile>/cordis.patch.yml:
+#
+#   - id: ui-skin-hana
+#     disabled: true
+#
+- insert:
+    - id: ui-skin-hana
+      name: 'hana-theme-for-dsh'

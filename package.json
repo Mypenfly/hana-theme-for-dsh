@@ -1,0 +1,79 @@
+{
+  "name": "hana-theme-for-dsh",
+  "version": "1.0.0",
+  "description": "HanaAgent-style theme for DeepSeek Harness: warm paper ground, layered ink, a single seal-blue accent, serif reading typography.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "plugin",
+    "theme",
+    "hana",
+    "paper",
+    "serif",
+    "client"
+  ],
+  "license": "MIT",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./skin.json": "./skin.json",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "version": "0.1.2-rc.1 - 0.1.5-alpha.1",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-theme",
+        "theme"
+      ]
+    }
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "skin.json",
+    "README.md",
+    "README.zh.md",
+    "LICENSE",
+    "docs",
+    "assets"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test/check.js && node test/tokens.test.js && node test/contrast.test.js",
+    "check": "node test/check.js",
+    "tokens": "node test/tokens.test.js",
+    "contrast": "node test/contrast.test.js",
+    "refresh:allowlist": "node tools/refresh-allowlist.mjs",
+    "allowlist:all": "node tools/refresh-allowlist.mjs --all",
+    "probe": "node test/dom-probe.js --print",
+    "allowlist:check": "node tools/refresh-allowlist.mjs --check"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  },
+  "author": "Mypenfly",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mypenfly/hana-theme-for-dsh.git"
+  },
+  "homepage": "https://github.com/Mypenfly/hana-theme-for-dsh#readme",
+  "bugs": {
+    "url": "https://github.com/Mypenfly/hana-theme-for-dsh/issues"
+  }
+}

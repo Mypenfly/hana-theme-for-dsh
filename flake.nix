@@ -1,0 +1,206 @@
+{
+  description = "hana-theme-for-dsh — a HanaAgent-style (paper-and-ink) theme for DeepSeek Harness, plus its development shell";
+
+  # Tracks the NixOS 26.05 release branch; `flake.lock` pins the exact revision.
+  #
+  # The lock currently points at the SAME nixpkgs revision this host is built
+  # from (rev 5dfba62, 2026-08-31), which is deliberate: `nix develop` then
+  # resolves to store paths that already exist on the machine, so the dev shell
+  # downloads nothing and its Node is byte-identical to the one NixOS ships.
+  # Locking the branch tip instead would pull a slightly newer nixpkgs (and a
+  # ~50 MB source download) for no benefit a dev shell can use.
+  #
+  # Move it forward — to a newer 26.05 revision, or to whatever channel the
+  # machine has been upgraded to — with
+  #
+  #   nix flake update nixpkgs
+  #
+  # or, to re-align with the host after a system upgrade:
+  #
+  #   nix flake lock --override-input nixpkgs \
+  #     "github:NixOS/nixpkgs/$(nixos-version | cut -d. -f4)"
+  #
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+
+  outputs =
+    {
+      self,
+      nixpkgs,
+    }:
+    let
+      inherit (nixpkgs) lib;
+
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+      forAllSystems = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system} system);
+
+      # Node 24 is what the harness itself runs on, so the tests exercise the
+      # same runtime semantics the plugin will meet in the browser host.
+      nodejs = pkgs: pkgs.nodejs_24;
+
+      # Only the files that make up the plugin. Without this the whole working
+      # tree — including the multi-megabyte `.research/` reference clones — would
+      # be copied into the Nix store on every evaluation.
+      src =
+        pkgs:
+        lib.fileset.toSource {
+          root = ./.;
+          fileset = lib.fileset.unions [
+            ./package.json
+            ./cordis.patch.yml
+            ./skin.json
+            ./README.md
+            ./README.zh.md
+            ./LICENSE
+            ./docs
+            ./lib
+            ./test
+            ./tools
+          ];
+        };
+
+      # The checks are the release gate: `nix flake check` runs exactly what
+      # `npm test` runs, in a sandbox with no network and a read-only source, so
+      # a test that only passes because it wrote something will fail here.
+      checkCommands = ''
+        node test/check.js
+        node test/tokens.test.js
+        node test/contrast.test.js
+      '';
+    in
+    {
+      devShells = forAllSystems (
+        pkgs: _: {
+          default = pkgs.mkShell {
+            name = "hana-theme-for-dsh";
+
+            packages = [
+              (nodejs pkgs)
+              pkgs.pnpm
+              pkgs.git # `dsh plugin add <git-url>` and flake operations
+              pkgs.jq # pretty-printing the Phase 0 DOM probe result
+            ];
+
+            # PNPM_HOME does double duty and both halves are wanted: it is the
+            # global bin directory, and pnpm 11.21 also roots its
+            # content-addressable store underneath it — verified by
+            # `pnpm store path`, which reports $PWD/.pnpm/store/v11 with this
+            # set and ~/.local/share/pnpm/store/v11 without it. So the store
+            # stays inside the working tree and `git clean -xdf` wipes the whole
+            # toolchain. A `store-dir` line in .npmrc does NOT work here
+            # (`pnpm config get store-dir` stays undefined), which is why there
+            # is no .npmrc in this repo.
+            shellHook = ''
+              export PNPM_HOME="$PWD/.pnpm"
+              export PATH="$PNPM_HOME:$PATH"
+
+              # `dsh plugin add <abs-path>` links this checkout into a profile;
+              # DSH_HOME is where those profiles live.
+              export DSH_HOME="''${DSH_HOME:-$HOME/.dsh}"
+
+              cat <<'BANNER'
+              ── hana-theme-for-dsh ─────────────────────────────────────────────
+              BANNER
+              printf '  node %s   pnpm %s\n' "$(node --version)" "$(pnpm --version)"
+              cat <<'BANNER'
+
+                npm test                    allow-list + contrast + static checks
+                npm run allowlist:check     is the committed allow-list still fresh?
+                npm run refresh:allowlist   re-derive the token allow-list from DSH
+                npm run probe               print the Phase 0 DOM probe script
+
+                dsh plugin --profile web add "link:$PWD"    install (desktop is app-owned)
+                dsh plugin --profile web remove hana-theme-for-dsh
+              ───────────────────────────────────────────────────────────────────
+              BANNER
+            '';
+          };
+        }
+      );
+
+      packages = forAllSystems (
+        pkgs: _:
+        let
+          package = pkgs.stdenv.mkDerivation (finalAttrs: {
+            pname = "hana-theme-for-dsh";
+            version = (lib.importJSON ./package.json).version;
+
+            src = src pkgs;
+
+            # The client half is a `window.__ModuleLoader__.load(...)` factory
+            # with no build step, so there is nothing to compile: the source in
+            # `lib/` is the shipped artifact.
+            dontBuild = true;
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out
+              cp -r lib test tools cordis.patch.yml skin.json package.json README.md LICENSE $out/
+              runHook postInstall
+            '';
+
+            meta = {
+              description = "HanaAgent-style paper-and-ink theme for DeepSeek Harness";
+              license = lib.licenses.mit;
+              platforms = lib.platforms.unix;
+            };
+          });
+        in
+        {
+          default = package;
+          hana-theme-for-dsh = package;
+        }
+      );
+
+      checks = forAllSystems (
+        pkgs: _: {
+          tests =
+            pkgs.runCommandLocal "hana-theme-for-dsh-checks" { nativeBuildInputs = [ (nodejs pkgs) ]; }
+              ''
+                cp -r ${src pkgs} source
+                chmod -R u+w source
+                cd source
+                ${checkCommands}
+                touch $out
+              '';
+
+          # NOTE — there is deliberately no "allow-list is fresh" check here.
+          #
+          # Regenerating the allow-list requires an INSTALLED DeepSeek Harness to
+          # read the palette out of, and a Nix build sandbox only exposes the
+          # derivation's own closure in /nix/store, so no dsh-* path exists to
+          # find. The check runs where a harness actually is:
+          #
+          #   npm run allowlist:check
+          #
+          # which fails the build if test/token-allowlist.json no longer matches
+          # the installed ui-theme. Keeping it out of `nix flake check` is a
+          # statement about what a pure build can know, not an omission.
+        }
+      );
+
+      apps = forAllSystems (
+        pkgs: _: {
+          refresh-allowlist = {
+            type = "app";
+            meta = {
+              description = "Re-derive test/token-allowlist.json from the installed DeepSeek Harness";
+              maintainers = [ ];
+            };
+            program = "${
+              pkgs.writeShellApplication {
+                name = "refresh-allowlist";
+                runtimeInputs = [ (nodejs pkgs) ];
+                text = ''exec node ${./tools/refresh-allowlist.mjs} "$@"'';
+              }
+            }/bin/refresh-allowlist";
+          };
+          default = self.apps.${pkgs.stdenv.hostPlatform.system}.refresh-allowlist;
+        }
+      );
+
+      formatter = forAllSystems (pkgs: _: pkgs.nixfmt);
+    };
+}
