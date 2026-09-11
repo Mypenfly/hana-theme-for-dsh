@@ -202,7 +202,7 @@ const MUTATIONS = [
     why: 'restores 珊瑚\'s shipped secondary, which sat 60% off the even step between its two anchors — the palette read with a visibly different hierarchy from its siblings',
     suite: 'ramp',
     marker: 'is not geometric',
-    find: '      "--dsw-alias-label-secondary": "#3E5061",\n',
+    find: '      "--dsw-alias-label-secondary": "#3C4F60",\n',
     replace: '      "--dsw-alias-label-secondary": "#314153",\n',
   },
   {
@@ -247,7 +247,7 @@ const MUTATIONS = [
     why: 'moves the modal overlay off the raised card it is a second name for, so an overlay and a card stop being the same surface — the drift the mirror assertions exist to catch, and which the surface derivation produced once before they did',
     suite: 'ramp',
     marker: 'has drifted apart',
-    find: '      "--dsw-alias-bg-overlay": "#FBF7EE",\n',
+    find: '      "--dsw-alias-bg-overlay": "#FDF8EF",\n',
     replace: '      "--dsw-alias-bg-overlay": "#F7F2E8",\n',
   },
 ];

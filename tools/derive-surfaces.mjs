@@ -69,6 +69,13 @@ const PLANE_FLOOR = ROLE_LEDGER.planeFloor || 1.06
    read against a container the eye has already separated — but it must be read
    at all. */
 const SEPARATION_FLOOR = 1.02
+/* How much room a plane needs on its own side of the ground to actually READ
+   as that plane rather than merely to pass. A card that only just clears the
+   floor is a card nobody notices, and on 珊瑚's ground the raised side tops
+   out at 1.073 — so "just clears" is all it could ever do. A surface whose
+   preferred side cannot give it this much moves to the other one: a recessed
+   card is legible, an invisible one is not. */
+const READ_HEADROOM = 1.02
 
 /**
  * Pairs that are on screen together and must therefore be tellable apart. The
@@ -81,6 +88,8 @@ const SEPARATION_FLOOR = 1.02
  */
 const SEPARATION = [
   ['--dsw-alias-bg-layer-1', '--dsw-specific-bubble', 'beside', 'an assistant bubble and a tool card are visible at the same time'],
+  ['--dsw-alias-bg-layer-1', '--dsw-alias-bg-layer-2', 'beside', 'a card and a well are on screen together'],
+  ['--dsw-alias-bg-layer-2', '--dsw-alias-bg-layer-3', 'beside', 'a well and a deeper well are on screen together'],
   ['--dsw-specific-bubble', '--dsw-alias-markdown-code-block', 'contains', ''],
   ['--dsw-specific-bubble', '--dsw-alias-markdown-inline-code', 'contains', ''],
   ['--dsw-specific-bubble', '--dsw-specific-tip', 'contains', ''],
@@ -196,9 +205,19 @@ const RAISED = new Set([
 
 function solveOnSide(value, reference, floor, name) {
   const ref = reference.toLowerCase()
-  if (value.toLowerCase() !== ref && contrast(value, reference) >= floor) return value
+  /* A surface MEANT to be raised is held to floor x READ_HEADROOM even when it
+     already clears the floor: merely passing is what made 珊瑚's card
+     invisible. Everything else is satisfied by the floor itself. */
+  const need = RAISED.has(name) ? floor * READ_HEADROOM : floor
+  if (value.toLowerCase() !== ref && contrast(value, reference) >= need) return value
   const v = toOklab(value, reference)
-  const dir = RAISED.has(name) ? 1 : -1
+  /* RAISED is a PREFERENCE, not a rule: it says which surfaces are conceptually
+     sheets above the paper. Headroom decides whether the palette can afford
+     one. A surface that ships on the raised side and passes is returned above
+     and never reaches here. */
+  const maxUp = contrast(fromOklab(v.L + 0.85, v.a, v.b), reference)
+  const raised = RAISED.has(name) && maxUp >= floor * READ_HEADROOM
+  const dir = raised ? 1 : -1
   const best = (d) => fromOklab(v.L + dir * d, v.a, v.b)
 
   let lo = 0
@@ -206,11 +225,11 @@ function solveOnSide(value, reference, floor, name) {
   let found = null
   for (let i = 0; i < 70; i += 1) {
     const mid = (lo + hi) / 2
-    if (contrast(best(mid), reference) >= floor) { found = mid; hi = mid } else lo = mid
+    if (contrast(best(mid), reference) >= need) { found = mid; hi = mid } else lo = mid
   }
   if (found === null) {
     unreachable.push(
-      `${name}: ${value} cannot reach ${floor}:1 against ${reference} toward ${dir > 0 ? 'white' : 'black'} ` +
+      `${name}: ${value} cannot reach ${need}:1 against ${reference} toward ${dir > 0 ? 'white' : 'black'} ` +
         `(that side tops out at ${contrast(best(0.85), reference).toFixed(3)}:1)`,
     )
     return value
@@ -220,10 +239,10 @@ function solveOnSide(value, reference, floor, name) {
      the floor, searching only on the far side so the result can never fall back
      below it. Same quantisation the ink ramp has to handle. */
   let out = best(found)
-  let err = Math.abs(contrast(out, reference) - floor)
+  let err = Math.abs(contrast(out, reference) - need)
   for (let i = 0; i <= 120; i += 1) {
     const hex = best(found + (i / 120) * 0.03)
-    const e = Math.abs(contrast(hex, reference) - floor)
+    const e = Math.abs(contrast(hex, reference) - need)
     if (e < err) { err = e; out = hex }
   }
   return out

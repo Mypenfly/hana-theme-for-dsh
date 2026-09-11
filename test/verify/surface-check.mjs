@@ -89,7 +89,28 @@ const readBundleCss = (pkg) => {
   return sheets.join('\n');
 };
 
-/** The real hashed class name for a CSS-Module local, read out of the sheet. */
+/** The real hashed class name for a CSS-Module local, read out of the sheet.
+ *
+ *  Several modules share a bundle and every one of them has a `root`, so the
+ *  first `.X_root` in the sheet is usually the WRONG one: the first version of
+ *  this helper returned another module's root, the harness's own rule therefore
+ *  never applied, and the probe measured a `<button>` with UA default styling —
+ *  centred text and all. It reported a failure, which is how it was caught, but
+ *  for a reason that had nothing to do with the theme.
+ *
+ *  So the class is read out of the MODULE MAP the bundle publishes
+ *  (`var Foo_module_css_default = { "root": "AbCdE_root" }`) rather than by
+ *  pattern-matching the sheet. */
+const clsFromMap = (src, moduleName, local) => {
+  const at = src.indexOf(`var ${moduleName}_module_css_default = {`);
+  if (at < 0) throw new Error(`module map ${moduleName} not found`);
+  const end = src.indexOf('};', at);
+  const body = src.slice(at, end);
+  const m = new RegExp(`"${local}"\\s*:\\s*"([A-Za-z0-9_-]+)"`).exec(body);
+  if (!m) throw new Error(`${moduleName} has no local "${local}"`);
+  return m[1];
+};
+
 const clsOf = (css, local) => {
   const m = new RegExp(`\\.([A-Za-z0-9_-]+)_${local}\\b`).exec(css);
   if (!m) throw new Error(`class _${local} not found in the sheet`);
@@ -109,6 +130,7 @@ for (const pkg of [
 
 const W = SHEETS['dsh-client-ui-workspace'];
 const C = SHEETS['dsh-client-ui-chat'];
+const C_SRC = readFileSync(join(PROFILE_MODULES, 'dsh-client-ui-chat', 'lib', 'client.js'), 'utf8');
 const S = SHEETS['dsh-client-ui-settings-general'];
 const T = SHEETS['dsh-client-ui-tool'];
 const D = SHEETS['dsh-client-ui-deliverables'];
@@ -120,6 +142,7 @@ const NAMES = {
   sessionRow: clsOf(W, 'sessionRow'),
   selected: clsOf(W, 'selected'),
   flowItem: clsOf(C, 'flowItem'),
+  processBar: clsFromMap(C_SRC, 'TurnProcessNodeView', 'root'),
   column: clsOf(C, 'column'),
   toolRoot: clsOf(T, 'root'),
   toolIoCard: clsOf(T, 'ioCard'),
@@ -165,6 +188,7 @@ function doc(palette) {
 </head><body ${attrs} style="${inlineTokens(inline)}">
 <div class="${NAMES.column}">
   <div class="${NAMES.flowItem}" data-turn-process-answer><span data-edge="prose">Prose output.</span></div>
+  <button type="button" class="${NAMES.processBar}" data-turn-process-tool-calls="3" aria-expanded="false"><span data-edge="bar">Thought for a while</span></button>
   <div class="${NAMES.flowItem}" data-turn-process-member><span data-edge="card">Tool call.</span>
     <div class="${NAMES.toolRoot}" data-tool="bash" data-state="ok">
       <div class="${NAMES.toolIoCard}">io</div>
@@ -243,7 +267,8 @@ document.querySelectorAll('iframe').forEach((f) => {
     navCurrent: pick(f.contentWindow, doc, '[aria-current="true"]'),
     navPlain: pick(f.contentWindow, doc, 'button:not([aria-current])'),
     nestedTool: pick(f.contentWindow, doc, '[data-turn-process-member] [data-tool]'),
-    edges: { prose: edge('prose'), card: edge('card'), artifact: edge('artifact') },
+    bar: pick(f.contentWindow, doc, '[data-turn-process-tool-calls]'),
+    edges: { prose: edge('prose'), card: edge('card'), artifact: edge('artifact'), bar: edge('bar') },
   };
 });
 fetch('/report', { method: 'POST', body: JSON.stringify(out) });
@@ -392,6 +417,25 @@ for (const [id, got] of Object.entries(collected)) {
   }
   if (!got.tail || got.tail.borderTopWidth === '0px') {
     failures.push(`${id}: the end-of-turn block has no rule above it`);
+  }
+  /* The COLLAPSED presentation, which the first pass missed entirely. A tool
+     call has two forms and only one of them was styled; the one left behind was
+     the one on screen most of the time. */
+  if (!got.bar || got.bar.bg !== rgb(want.card)) {
+    failures.push(
+      `${id}: the collapsed tool-call summary resolved to ${got.bar ? got.bar.bg : 'nothing'}, ` +
+        `expected ${rgb(want.card)} — unpainted it is a full-width transparent row with a rule ` +
+        'under it, which reads as a separator rather than as a control',
+    );
+  }
+  if (!got.bar || got.bar.borderLeftWidth === '0px') {
+    failures.push(`${id}: the collapsed tool-call summary has no border`);
+  }
+  if (got.edges.bar !== null && got.edges.prose !== null && !near(got.edges.bar, got.edges.prose)) {
+    failures.push(
+      `${id}: the collapsed summary's label starts at ${got.edges.bar.toFixed(1)}px against prose at ` +
+        `${got.edges.prose.toFixed(1)}px — the bar must bleed by its padding and border too`,
+    );
   }
   if (!got.prose || got.prose.bg !== 'transparent') {
     failures.push(

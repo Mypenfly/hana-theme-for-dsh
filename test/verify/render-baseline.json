@@ -59,19 +59,19 @@
     {
       "variant": "hana-coral · pinned",
       "rendered": true,
-      "codeBg": "#f4ece4",
+      "codeBg": "#f0e8e1",
       "pageBg": "#fdf6ec",
       "belowAA": 0,
       "tokens": {
-        "comment": "#656c74",
-        "string": "#247934",
-        "parameter": "#b14409",
-        "constant": "#1560a3",
-        "string-expression": "#21692f",
-        "keyword": "#a92251",
-        "link": "#135694",
-        "function": "#4824b4",
-        "punctuation": "#383d42"
+        "comment": "#636a72",
+        "string": "#237633",
+        "parameter": "#ae4309",
+        "constant": "#155ea0",
+        "string-expression": "#20672e",
+        "keyword": "#a5214f",
+        "link": "#135591",
+        "function": "#4623b0",
+        "punctuation": "#373c41"
       }
     },
     {

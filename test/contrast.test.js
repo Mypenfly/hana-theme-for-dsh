@@ -457,9 +457,20 @@ for (const { id: themeName, tokens } of PALETTES) {
   const base = oklab(tokens['--dsw-alias-bg-base'], tokens['--dsw-alias-bg-base']).L;
   const d = (name) => (oklab(tokens['--dsw-alias-' + name], tokens['--dsw-alias-bg-base']).L - base) * 100;
   const [d1, d2, d3] = [d('bg-layer-1'), d('bg-layer-2'), d('bg-layer-3')];
+  /* The card is RAISED when the palette has room above the ground, and the
+     SHALLOWEST RECESS when it does not. Both are legitimate shapes; what is not
+     legitimate is a ladder whose order stops reading. 珊瑚's ground is L* 97.6,
+     so its raised side tops out at 1.073 and a card up there is white on
+     near-white — it recesses instead, and then the ORDER carries the meaning. */
   elevationAssertions += 1;
-  if (!(d1 > 0)) {
-    failures.push(`#31 ${themeName}: bg-layer-1 is ${d1.toFixed(1)} L* from bg-base — a card must be raised`);
+  const cardRaised = d1 > 0 && d2 < 0;
+  const cardShallowest = d1 < 0 && d2 < 0 && Math.abs(d1) < Math.abs(d2);
+  if (!cardRaised && !cardShallowest) {
+    failures.push(
+      `#31 ${themeName}: the elevation ladder does not read — layer-1 is ${d1.toFixed(1)} L* from ` +
+        `bg-base and layer-2 is ${d2.toFixed(1)}. A card is either raised above the ground or the ` +
+        'shallowest recess; it cannot sit deeper than the well beside it',
+    );
   }
   elevationAssertions += 1;
   if (!(d2 < 0)) {
