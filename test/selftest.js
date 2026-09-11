@@ -120,6 +120,20 @@ const MUTATIONS = [
     replace: 'if (false) {',
   },
   {
+    id: 'seal-registered-unconditionally',
+    why: 'drops both conditions on the seal — the opt-in switch and the claimed palette — so a brand mark replaces the shipped logo even under the built-in themes, which is the "I installed a theme and it repainted my UI" failure the whole architecture exists to prevent',
+    section: '12 —',
+    find: '        var want = claimed !== null && prefs.isOn("sealMark");',
+    replace: '        var want = true;',
+  },
+  {
+    id: 'seal-not-cleared-on-detach',
+    why: 'leaves the sidebar brand-mark registration behind after unload, so the shipped logo never comes back',
+    section: '12 —',
+    find: '        clearShiki();\n        clearBrandMark();',
+    replace: '        clearShiki();',
+  },
+  {
     id: 'contributes-without-a-claimed-palette',
     why: 'breaks the negative promise the architecture exists for: something is styled even though no hana palette was ever selected — "I installed a theme and it repainted my UI"',
     section: '1 —',

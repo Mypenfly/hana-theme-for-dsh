@@ -80,6 +80,8 @@ Installed but inert:
 
 ## What it changes, and what it refuses to change
 
+**One more, off by default.** The sidebar seal replaces the shell's brand mark with a 「花」 seal. It is the **only** place this theme replaces shipped UI, which is why it is opt-in — replacing someone's logo is an opinion, and installing a theme should not impose one. Its two colours are not new: `--dsw-alias-button-primary-fill` against `--dsw-alias-label-primary-foreground` is assertion pair #7 in `test/contrast.test.js`, verified in all four palettes. Judgement #28 guards the relationship — **point the seal at a pair nobody verified and the build fails.**
+
 **Changes.** The 89 alias/specific colour tokens for whichever palette is active, **the eleven syntax-highlighting variables for that same palette** (comments, keywords, strings and the rest inside code blocks — see below), and — while a hana palette is claimed and 衬线阅读体 is on — the font *family* of markdown reading text, plus the opt-in ornament layer.
 
 **Refuses.** Everything else, and the most important behaviour here is a negative one: **while no hana palette is claimed, the plugin contributes nothing at all** — no stylesheet, no body attribute, no token layer. Installing it cannot repaint the built-in themes and cannot leak typography into another skin.
@@ -102,6 +104,7 @@ Two further choices worth knowing:
 | 纸质纹理 | off | a full-viewport procedural grain |
 | 纹理强度 | 32% (0–60%) | |
 | 极方圆角 | off | squares named control categories only |
+| 侧栏印章 | off | swaps the sidebar brand mark for a 「花」 seal — the one place this theme replaces shipped UI |
 
 The panel also reports whether settings are durably stored. If it ever says they are not, they will not survive a restart — that message exists because a silently non-persisting switch is worse than a broken one.
 
@@ -215,9 +218,9 @@ Midnight's narrow range is the honest cost of its **code surface being light** (
 
 A theme fails *silently*. A misspelled token is accepted without complaint and read by nobody; a stray character makes the browser drop one rule and carry on; a stylesheet colour looks correct right up until another token-writing plugin is installed. So the checks here are not ceremony.
 
-**`test/contrast.test.js` — 131 assertions.** 19 pairs × 4 palettes, per-scheme foreground polarity, a link-readability band, a compositing model for the paper grain, and **the code-block syntax colours: 9 tokens × 4 palettes plus 4 "the palette was not flattened" assertions**. Values are read out of the shipped tables, never a second copy. Run with `--verbose` to print every measured pair.
+**`test/contrast.test.js` — 132 assertions.** 19 pairs × 4 palettes, per-scheme foreground polarity, a link-readability band, a compositing model for the paper grain, and **the code-block syntax colours: 9 tokens × 4 palettes plus 4 "the palette was not flattened" assertions**. Values are read out of the shipped tables, never a second copy. Run with `--verbose` to print every measured pair.
 
-**`test/check.js` — 82 static judgements.** No hash-shaped selectors, nothing declared on `:root`, no registered colour token declared in the stylesheet, no `--hana-*` token that nothing reads, no `settingsScope.bind()` with a bare string, no synchronous `setTheme()` in a `theme/change` listener, an idempotent override layer, every runtime path present in `files`, a `ctx.effect` disposer chain that releases every side effect, and the syntax palette applied on the palette path and released on the detach path. The new judgements were mutation-tested: delete `applyShiki()` or `clearShiki()` and the build must fail.
+**`test/check.js` — 91 static judgements.** No hash-shaped selectors, nothing declared on `:root`, no registered colour token declared in the stylesheet, no `--hana-*` token that nothing reads, no `settingsScope.bind()` with a bare string, no synchronous `setTheme()` in a `theme/change` listener, an idempotent override layer, every runtime path present in `files`, a `ctx.effect` disposer chain that releases every side effect, and the syntax palette applied on the palette path and released on the detach path. The new judgements were mutation-tested: delete `applyShiki()` or `clearShiki()` and the build must fail.
 
 **`test/surfaces.test.js` — the colour-surface ledger, 195 entries.** This is the one assertion *about the test suite itself*, and it is the real lesson from that defect.
 
@@ -238,7 +241,7 @@ The reverse direction matters just as much: **a surface claimed as `theme` must 
 
 **`test/tokens.test.js`** — every colour token name must appear in an allow-list generated from the installed harness, all four palettes must cover the same names, the eleven syntax names must match the harness's declared set exactly (also generated, by `refresh-allowlist.mjs`), and `--shiki-background` must equal the `--dsw-alias-markdown-code-block` it is painted on.
 
-**`test/runtime.test.js` — 82 assertions, with the plugin actually EXECUTED.** Every suite above reads source text or shipped tables; this one reads behaviour. That distinction matters more here than it usually would, because "the theme fails silently" is a runtime property: a token the presenter wipes, a listener that re-enters, a deferred re-apply that loses a race, a write that lands nowhere. None of those are visible in the text of a file, and the one severe bug in this project's history (§5.7, the four-layer settings-persistence chain) was made entirely of them. The lesson that bug produced was *"① explicit contract + ② visible durability state + ③ a judgement"* — ① and ② shipped long ago; **③ never did.**
+**`test/runtime.test.js` — 95 assertions, with the plugin actually EXECUTED.** Every suite above reads source text or shipped tables; this one reads behaviour. That distinction matters more here than it usually would, because "the theme fails silently" is a runtime property: a token the presenter wipes, a listener that re-enters, a deferred re-apply that loses a race, a write that lands nowhere. None of those are visible in the text of a file, and the one severe bug in this project's history (§5.7, the four-layer settings-persistence chain) was made entirely of them. The lesson that bug produced was *"① explicit contract + ② visible durability state + ③ a judgement"* — ① and ② shipped long ago; **③ never did.**
 
 It guards eleven behaviours: contributing nothing until a palette is claimed; complete reversibility on unload; the syntax palette applied, following the palette rather than the colorScheme, replaced not merged on switch, and cleared on detach; the override layer rebuilt only when the choice changes; the §5.7 regression itself; the deferred re-apply asserted as an *ordering* guarantee; the settings write gate plus its visible warning; the panel rendering with controls wired to real rows; the master switch; a dark palette not being swapped for its light partner; and the four ornament switches, including that an out-of-range value falls back rather than writing a broken font shorthand.
 
@@ -262,7 +265,7 @@ The inline styles in the probe come from **the real plugin**, not restated from 
 
 **`test/selftest.js` — the mutation proof that the above is not vacuous.** A test that passes for the wrong reason looks exactly like one that passes for the right reason, and nothing in a green run tells them apart. This repo has already been on the wrong side of that: 91 contrast assertions were passing while an entire colour channel was unreadable.
 
-So it takes the **real** bundle, injects a bug that either happened here or is a plausible next one, runs the suite in a **fresh process** against the mutated copy, and requires it to fail. Two things keep it honest: the injection is itself verified (a stale anchor is reported `INAPPLICABLE` and **counted as a failure**, because a mutation that silently did not apply would "pass" while proving nothing), and the expected *section* must appear in the output — "something failed" would also be satisfied by an unrelated crash. Eleven mutations, eleven behaviours, all caught, plus a baseline asserting the unmutated bundle passes.
+So it takes the **real** bundle, injects a bug that either happened here or is a plausible next one, runs the suite in a **fresh process** against the mutated copy, and requires it to fail. Two things keep it honest: the injection is itself verified (a stale anchor is reported `INAPPLICABLE` and **counted as a failure**, because a mutation that silently did not apply would "pass" while proving nothing), and the expected *section* must appear in the output — "something failed" would also be satisfied by an unrelated crash. Thirteen mutations, thirteen behaviours, all caught, plus a baseline asserting the unmutated bundle passes.
 
 > An honest note: B1 found no new bug. The real bundle was already correct on all eleven behaviours. Its value is turning "no bug" from a comment into **a conclusion with evidence, and then locking it** — which is worth as much as a fix, but reads less dramatically.
 

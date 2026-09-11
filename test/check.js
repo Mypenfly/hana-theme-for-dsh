@@ -360,6 +360,7 @@ if (detachBody) {
     ['removeAttribute(SHAPE_ATTR)', 'the radii attribute'],
     ['removeProperty(GRAIN_VAR)', 'the inline grain intensity'],
     ['clearShiki()', 'the inline syntax palette'],
+    ['clearBrandMark()', 'the sidebar seal registration'],
   ]) {
     check(detachBody.includes(needle), `detach() does not release ${what} (missing \`${needle}\`)`);
   }
@@ -396,6 +397,27 @@ check(
  *   - never released -> a detached theme leaves eleven inline custom properties
  *     on <body>, so the next theme's code blocks keep hana's syntax colours.
  */
+/* 28 — the slot service must be resolved BEFORE reconcile() runs.
+ *
+ * `var` hoisting makes a later assignment read as `undefined` at every earlier
+ * call site. reconcile() is the function that mounts the visual layer, so if the
+ * slot lookup sits next to the settings panel — which is where it naturally
+ * wants to live, since that is the other thing using it — then the first pass
+ * sees no slots at all and the seal silently fails to appear until some
+ * unrelated re-render happens to run reconcile() again.
+ *
+ * That is the same trap as reading SCALE_DEFAULT before FIELD_DEFAULTS is
+ * assigned, which this file already guards, and it is invisible to any test
+ * that only ever inspects the final state. */
+const slotsReadAt = source.indexOf('ctx.get("slots")');
+const reconcileAt = source.indexOf('function reconcile(');
+check(slotsReadAt >= 0, 'the plugin never reads the slot service');
+check(
+  slotsReadAt >= 0 && reconcileAt >= 0 && slotsReadAt < reconcileAt,
+  'ctx.get("slots") appears AFTER reconcile() is defined, so the first reconcile pass would ' +
+    'see undefined and the seal would not appear until an unrelated re-render',
+);
+
 const reconcileBody = functionBody(source, 'function reconcile(');
 check(reconcileBody !== null, 'no reconcile() found; the visual state has no single owner');
 if (reconcileBody !== null) {
@@ -405,6 +427,23 @@ if (reconcileBody !== null) {
       'code blocks would keep colours chosen for a different surface',
   );
 }
+/* The seal is the one place this theme replaces shipped UI, which makes its
+   registration the easiest thing in the file to leave behind on unload. */
+const reconcileHasSeal = /applyBrandMark\(/.test(reconcileBody || '');
+check(
+  reconcileHasSeal,
+  'reconcile() never calls applyBrandMark(), so the sidebar seal setting would do nothing',
+);
+const applyBrandMarkBody = functionBody(source, 'function applyBrandMark(');
+check(
+  applyBrandMarkBody !== null && applyBrandMarkBody.includes('clearBrandMark()'),
+  'applyBrandMark() cannot clear its own registration, so switching the seal off would leave it on',
+);
+check(
+  /isOn\("sealMark"\)/.test(applyBrandMarkBody || ''),
+  'applyBrandMark() does not consult the sealMark preference — the seal would be unconditional',
+);
+
 const applyShikiBody = functionBody(source, 'function applyShiki(');
 check(
   applyShikiBody !== null && applyShikiBody.includes('clearShiki()'),

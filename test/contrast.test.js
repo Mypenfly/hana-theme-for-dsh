@@ -305,6 +305,36 @@ for (const p of PALETTES) {
   }
 }
 
+/* #28 — the seal's colours must be a pair this suite already measures.
+ *
+ * The sidebar seal is the one place the theme draws something new — a glyph on a
+ * filled square. It would have been easy to give it its own two colours and its
+ * own intuition about whether they are readable. Instead it names an existing
+ * pair (label on a filled primary button, assertion #1..23 territory), and this
+ * assertion is what makes that claim checkable rather than aspirational: if
+ * someone re-points the seal at colours nobody verified, the build fails here.
+ */
+const seal = client.SEAL_COLORS;
+if (!seal || typeof seal.fill !== 'string' || typeof seal.ink !== 'string') {
+  failures.push(
+    '#28 lib/client.js does not export SEAL_COLORS, so the seal\'s readability cannot be checked',
+  );
+}
+if (seal) {
+  const strip = (token) => String(token).replace(/^--dsw-(?:alias|specific)-/, '');
+  const covered = PAIRS.some((p) => p.fg === strip(seal.ink) && p.bg === strip(seal.fill));
+  const first = PALETTES[0].tokens;
+  const look = (short) => first['--dsw-alias-' + short] || first['--dsw-specific-' + short];
+  const ratio = covered ? null : contrast(look(strip(seal.ink)), look(strip(seal.fill)));
+  if (!covered) {
+    failures.push(
+      `#28 the seal draws ${seal.ink} on ${seal.fill}, which is NOT one of the ${PAIRS.length} ` +
+        `asserted pairs (measured ${ratio === null ? 'n/a' : ratio.toFixed(2)}:1 in ${PALETTES[0].id}) — ` +
+        'either assert the pair or point the seal at one that is already asserted',
+    );
+  }
+}
+
 /* ── report ─────────────────────────────────────────────────────────────── */
 
 if (process.argv.includes('--verbose')) {
@@ -330,7 +360,8 @@ const assertions =
   2 +
   1 +
   grainAssertions +
-  syntaxAssertions;
+  syntaxAssertions +
+  1; // #28, the seal reuses an asserted pair
 if (failures.length) {
   console.error(`contrast: ${failures.length} FAILED of ${assertions} assertions\n`);
   for (const f of failures) console.error('  ✗ ' + f);
@@ -339,5 +370,6 @@ if (failures.length) {
 console.log(
   `contrast: ${assertions} assertions pass (${PAIRS.length} pairs x ${Object.keys(THEMES).length} palettes ` +
     `+ ${polarityAssertions} polarity + 2 link band + 1 soft-light neutrality + ${grainAssertions} grain-composite ` +
-    `+ ${syntaxAssertions} syntax: ${SYNTAX_TOKENS.length} tokens x ${PALETTES.length} palettes + ${PALETTES.length} spread)`,
+    `+ ${syntaxAssertions} syntax: ${SYNTAX_TOKENS.length} tokens x ${PALETTES.length} palettes + ${PALETTES.length} spread ` +
+    `+ 1 seal-pair)`,
 );

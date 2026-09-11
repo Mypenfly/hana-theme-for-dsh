@@ -466,7 +466,85 @@ section('11 — the ornament settings reach the DOM');
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   12 — the sidebar seal
+   ═══════════════════════════════════════════════════════════════════════════
+   The one place this theme replaces shipped UI, which makes it the easiest
+   thing in the file to leave behind on unload and the easiest to make
+   unconditional by accident. Both are checked, plus the negative promise: with
+   no palette claimed it must not register even when switched on, because a
+   brand mark appearing under the BUILT-IN themes would be the exact "installed
+   a theme and it repainted my UI" failure this architecture exists to prevent.
+*/
+section('12 — the sidebar seal');
+{
+  const env = createEnvironment();
+  env.assertLive();
+  env.apply();
+  env.claimPalette('hana-paper');
+
+  const sealSeat = () => env.slotRegistrations.find((r) => r.spec.name === 'sidebar.brand.mark');
+  ok(!sealSeat(), 'the seal registered even though its switch is off by default');
+
+  env.toggle('侧栏印章');
+  const seat = sealSeat();
+  ok(!!seat, 'switching the seal on did not register into sidebar.brand.mark');
+  if (seat) {
+    /* The component must be callable with the owner props the slot passes, and
+       must draw the VERIFIED colour pair — naming the pair is what lets
+       contrast.test.js check that it has one. */
+    const tree = seat.component({ size: 22 });
+    const style = tree && tree.props && tree.props.style;
+    ok(!!style, 'the seal component rendered nothing');
+    if (style) {
+      eq(style.background, `var(${env.client.SEAL_COLORS.fill})`, 'the seal fill is not the verified fill token');
+      eq(style.color, `var(${env.client.SEAL_COLORS.ink})`, 'the seal ink is not the verified ink token');
+      eq(style.width, '22px', 'the seal ignored the size the slot asked for');
+      ok(
+        typeof style.fontSize === 'string' && parseFloat(style.fontSize) < 22,
+        'the glyph is not scaled inside the requested square',
+      );
+    }
+    eq(tree.children, [env.client.SEAL_GLYPH], 'the seal does not render its glyph');
+  }
+
+  env.toggle('侧栏印章');
+  ok(!sealSeat(), 'switching the seal off left it registered');
+
+  /* And the whole-theme path: unload must take it with it. */
+  env.toggle('侧栏印章');
+  ok(!!sealSeat(), 'the seal did not come back on');
+  env.dispose();
+  ok(!sealSeat(), 'dispose() left the seal registration behind');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   13 — the seal stays silent under the built-in themes
+   ═══════════════════════════════════════════════════════════════════════════ */
+section('13 — the seal obeys the quiet-install promise');
+{
+  const env = createEnvironment();
+  env.assertLive();
+  env.apply();
+  /* Switched ON, but no palette claimed. */
+  env.toggle('侧栏印章');
+  ok(
+    !env.slotRegistrations.some((r) => r.spec.name === 'sidebar.brand.mark'),
+    'the seal registered while no hana palette was claimed, so it would replace the brand mark ' +
+      'under the built-in themes too',
+  );
+
+  /* Claiming a palette afterwards must bring it up, or the switch would appear
+     to do nothing until a reload. */
+  env.claimPalette('hana-coral');
+  ok(
+    env.slotRegistrations.some((r) => r.spec.name === 'sidebar.brand.mark'),
+    'the seal did not appear when a palette was claimed after the switch was thrown',
+  );
+}
+
 /* ── report ─────────────────────────────────────────────────────────────── */
+
 if (failures) {
   console.error(`\nruntime: ${failures} FAILED of ${assertions} assertions`);
   process.exit(1);
