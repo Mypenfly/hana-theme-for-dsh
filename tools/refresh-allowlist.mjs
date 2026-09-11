@@ -48,7 +48,7 @@
  *   node tools/refresh-allowlist.mjs --list-blocks  # debug: dump CSS selectors
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -285,6 +285,172 @@ for (const f of found.slice(1)) {
 }
 const versionDependent = [...elsewhere.keys()].sort()
 
+/* ── consumers ────────────────────────────────────────────────────────────
+ * WHY THIS IS NOT REDUNDANT WITH THE ALLOW-LIST
+ *
+ * The allow-list records what a ui-theme install DECLARES. The gate built on it
+ * says a name outside that list is a silent no-op, which is true and is why the
+ * gate exists. It has exactly one exception, and it is not hypothetical:
+ *
+ *   `--dsw-alias-link` — declared by ui-theme 0.1.5-alpha.1, absent from the
+ *   0.1.2-rc.1 this allow-list is pinned to, and READ by the copy of
+ *   dsh-client-ui-primitives that ships inside the community market
+ *   (WebBlock `.sourceLink` / `.fetchUrl`, MarkdownText `.markdown a`).
+ *
+ * Supplying it therefore has an effect, and declining it is worse than a no-op:
+ * `var(--dsw-alias-link)` with no fallback makes the declaration invalid at
+ * computed-value time, so the affected links lose their colour entirely instead
+ * of falling back to something sensible. A theme that only reads declarations
+ * cannot see this, which is why the reference side is scanned too.
+ *
+ * SCOPE, STATED SO IT CANNOT BE MISREAD AS "EVERYTHING": the packages that ship
+ * the DSH UI itself -- `@deepseek-ai/dsh-client-ui-*`, `dsh-web-frontend`, and
+ * `dsh-plugin-desktop` (which vendors the market). Separately installed
+ * community plugins are counted under `outsideScope` and deliberately not
+ * required: they invent their own token names, and a theme cannot be
+ * responsible for a contract nobody publishes.
+ */
+const SCOPE_PACKAGE = /^(dsh-client-ui-[a-z0-9-]+|dsh-web-frontend|dsh-plugin-desktop)$/
+const REFERENCE = /var\(\s*(--dsw-(?:alias|specific)-[a-zA-Z0-9-]+)/g
+
+/**
+ * Names a shipped UI reads but that this theme deliberately does NOT supply.
+ *
+ * Recorded rather than merely omitted, so "we chose not to" is distinguishable
+ * from "nobody noticed". A name may only be declined when EVERY read of it has
+ * a `var()` fallback — otherwise the declaration is dropped outright and the
+ * decline is a bug, not a decision. test/tokens.test.js enforces both halves.
+ */
+const DECLINED_READS = {
+  '--dsw-alias-font-mono':
+    'a FONT channel, not a colour: this theme restyles the reading typography ' +
+    '(--dsw-font-markdown-*) and deliberately leaves the UI chrome face alone. ' +
+    'Its fallback, `ui-monospace, monospace`, is already the right stack.',
+}
+
+const desktopAppRoots = () => {
+  const out = []
+  for (const p of storeCopies().desktop) {
+    const i = p.indexOf(join('node_modules', 'dsh-plugin-desktop'))
+    if (i > 0) out.push(p.slice(0, i))
+  }
+  return [...new Set(out)]
+}
+
+const uiRoots = () => {
+  const home = process.env.DSH_HOME
+  if (!home) return []
+  const profiles = join(home, 'profiles')
+  return [
+    join(profiles, 'node_modules', '@deepseek-ai'),
+    ...safeReaddir(profiles).map((n) => join(profiles, n, 'node_modules', '@deepseek-ai')),
+    ...desktopAppRoots().map((app) => join(app, 'node_modules')),
+  ]
+}
+
+/** Walk `dir`, following symlinks (the installed packages are links into the
+    store, and neither readdir-withFileTypes nor a plain recursive read follows
+    them), collecting `var(--dsw-{alias,specific}-*)` references. */
+function scanConsumers(dir, opts = {}) {
+  const found = new Map()
+  const seen = new Set()
+  const walk = (d, depth) => {
+    if (depth > 12) return
+    let real
+    try { real = realpathSync(d) } catch { return }
+    if (seen.has(real)) return
+    seen.add(real)
+    for (const e of safeReaddir(d)) {
+      const p = join(d, e)
+      let isDir, isFile
+      try { const st = statSync(p); isDir = st.isDirectory(); isFile = st.isFile() } catch { continue }
+      if (isDir) {
+        /* `select` names the package directories to scan; it applies to the
+           root's children only. Applying it at every level would reject `lib`
+           and every other ordinary subdirectory, which reads as "the scan found
+           nothing" rather than as an error. */
+        if (opts.select && depth === 0 && !opts.select(e)) continue
+        walk(p, depth + 1)
+        continue
+      }
+      if (!isFile) continue
+      if (!e.endsWith('.css') && e !== 'client.js') continue
+      let text
+      try { text = readFileSync(p, 'utf8') } catch { continue }
+      for (const m of text.matchAll(REFERENCE)) {
+        const name = m[1]
+        if (!found.has(name)) found.set(name, { packages: new Set(), bare: 0, padded: 0 })
+        const entry = found.get(name)
+        if (opts.label) entry.packages.add(opts.label(p))
+        /* Read the whole `var(...)` call: whether a fallback follows the comma
+           decides whether declining the name degrades or breaks.
+           `m.index + 3` is the call's own `(`, so the depth counter must start
+           at 0 and see it — starting past it leaves depth at -1 at the closing
+           paren, the scan runs on into the next declaration, and every read
+           looks as though it had a fallback. */
+        let depth = 0
+        let end = m.index + 3
+        for (; end < text.length; end += 1) {
+          if (text[end] === '(') depth += 1
+          else if (text[end] === ')') { depth -= 1; if (depth === 0) break }
+        }
+        const call = text.slice(m.index, end + 1)
+        if (/,\s*\S/.test(call.slice(m[0].length))) entry.padded += 1
+        else entry.bare += 1
+      }
+    }
+  }
+  walk(dir, 0)
+  return found
+}
+
+const inScope = new Map()
+for (const root of uiRoots()) {
+  if (!existsSync(root)) continue
+  const label = (p) => {
+    const i = p.indexOf(join('node_modules', '@deepseek-ai'))
+    const j = p.indexOf(join('node_modules', 'dsh-plugin-desktop'))
+    if (i >= 0) return p.slice(i + 'node_modules/@deepseek-ai/'.length).split('/')[0]
+    if (j >= 0) return p.slice(j + 'node_modules/'.length).split('/')[0]
+    return 'dsh-plugin-desktop'
+  }
+  /* Two shapes: an `@deepseek-ai` directory (select the UI packages by name) and
+     a plain node_modules that only contains dsh-plugin-desktop. */
+  const select = (name) => SCOPE_PACKAGE.test(name)
+  for (const [name, found] of scanConsumers(root, { select, label })) {
+    if (!inScope.has(name)) inScope.set(name, { packages: new Set(), bare: 0, padded: 0 })
+    const acc = inScope.get(name)
+    for (const p of found.packages) acc.packages.add(p)
+    acc.bare += found.bare
+    acc.padded += found.padded
+  }
+}
+
+const registered = new Set(chosen.light)
+const consumedNotRegistered = [...inScope.keys()]
+  .filter((n) => !registered.has(n))
+  .sort()
+
+/* Counted, not required. Read from the same shared root, one level of plugin
+   package deep, so the boundary is a number in the ledger rather than a
+   sentence in a document. */
+const outsideScope = new Map()
+{
+  const home = process.env.DSH_HOME
+  const root = home ? join(home, 'profiles', 'node_modules') : null
+  if (root && existsSync(root)) {
+    for (const name of safeReaddir(root)) {
+      if (name.startsWith('@') || name === 'dsh-plugin-desktop') continue
+      const dir = join(root, name)
+      try { if (!statSync(dir).isDirectory()) continue } catch { continue }
+      for (const [n] of scanConsumers(dir)) {
+        if (registered.has(n) || inScope.has(n)) continue
+        outsideScope.set(n, (outsideScope.get(n) || 0) + 1)
+      }
+    }
+  }
+}
+
 const payload = {
   $comment: 'GENERATED by tools/refresh-allowlist.mjs — do not edit by hand. Regenerate after a DSH upgrade.',
   source: {
@@ -305,6 +471,41 @@ const payload = {
     : {}),
   tokens: chosen.light,
   ...(chosen.syntax.length ? { syntaxTokens: chosen.syntax } : {}),
+  /* Names a shipped UI reads but no registered contract declares. Supplying
+     these is NOT a no-op, so test/tokens.test.js requires every palette to
+     supply each one unless it is explicitly declined. `fallback` records
+     whether any read would survive being declined: `none` or `mixed` means a
+     read without a fallback exists, so the declaration would be DROPPED rather
+     than defaulted, and declining it is a bug. `readBy` keeps the reason
+     attached, so it survives a DSH upgrade that moves the consumer. */
+  ...(consumedNotRegistered.length
+    ? {
+        consumedNotRegistered: Object.fromEntries(
+          consumedNotRegistered.map((n) => {
+            const e = inScope.get(n)
+            const fallback = e.bare ? (e.padded ? 'mixed' : 'none') : 'always'
+            return [n, {
+              readBy: [...e.packages].sort(),
+              fallback,
+              ...(DECLINED_READS[n] ? { declined: DECLINED_READS[n] } : {}),
+            }]
+          }),
+        ),
+      }
+    : {}),
+  consumerScan: {
+    scope:
+      'packages that ship the DSH UI itself: @deepseek-ai/dsh-client-ui-*, dsh-web-frontend, ' +
+      'dsh-plugin-desktop (which vendors the community market)',
+    namesRead: inScope.size,
+    outsideScope: {
+      note:
+        'separately installed community plugins also read --dsw-alias-* names, several of which no ' +
+        'published contract declares. They are counted here and deliberately NOT required: a theme ' +
+        'cannot be responsible for a contract nobody publishes.',
+      names: outsideScope.size,
+    },
+  },
 }
 
 const serialized = JSON.stringify(payload, null, 2) + '\n'
@@ -333,3 +534,36 @@ if (added.length) console.log(`  +${added.length}: ${added.slice(0, 10).join(', 
 if (removed.length) console.log(`  -${removed.length}: ${removed.slice(0, 10).join(', ')}${removed.length > 10 ? ' …' : ''}`)
 if (!added.length && !removed.length) console.log('  (no change)')
 if (versionDependent.length) console.log(`  version-dependent (not used): ${versionDependent.join(', ')}`)
+console.log(`  consumer scan: ${inScope.size} name(s) read by the shipped UI, ${outsideScope.size} by out-of-scope plugins`)
+if (consumedNotRegistered.length) {
+  console.log('  read but NOT declared by this install — the theme must supply these:')
+  for (const n of consumedNotRegistered) {
+    const e = inScope.get(n)
+    const mark = e.bare ? (e.padded ? 'mixed' : 'NONE  ') : 'always'
+    const declined = DECLINED_READS[n] ? '  (declined, see DECLINED_READS)' : ''
+    console.log(`    ${n.padEnd(38)} fallback=${mark}  <- ${[...e.packages].sort().join(', ')}${declined}`)
+  }
+} else {
+  console.log('  every name the shipped UI reads is declared by this install')
+}
+{
+  /* Whether the theme actually supplies each name is a property of the theme,
+     not of the install, so it is reported here and deliberately NOT stored:
+     putting it in the payload would make `--check` compare the file against
+     itself. test/tokens.test.js is the gate. */
+  const { createRequire } = await import('node:module')
+  try {
+    const require_ = createRequire(import.meta.url)
+    const client = require_(join(ROOT, 'lib', 'client.js'))
+    const supplied = new Set(Object.keys(client.PALETTES[0].tokens))
+    for (const n of consumedNotRegistered) {
+      if (supplied.has(n)) continue
+      if (DECLINED_READS[n]) continue
+      const e = inScope.get(n)
+      if (e.bare) console.error(`  UNRESOLVED: ${n} is read with NO fallback and is neither supplied nor declined`)
+    }
+  } catch {
+    /* the theme half is not loadable from here (no vm shim) — the offline test
+       is the authority, so this is a report, not a check */
+  }
+}

@@ -122,5 +122,77 @@
     "--shiki-token-punctuation",
     "--shiki-token-string",
     "--shiki-token-string-expression"
-  ]
+  ],
+  "consumedNotRegistered": {
+    "--dsw-alias-bg-layer-4": {
+      "readBy": [
+        "dsh-client-ui-settings-plugins"
+      ],
+      "fallback": "none"
+    },
+    "--dsw-alias-border-default": {
+      "readBy": [
+        "dsh-plugin-desktop"
+      ],
+      "fallback": "always"
+    },
+    "--dsw-alias-fill-l2": {
+      "readBy": [
+        "dsh-client-ui-jobs"
+      ],
+      "fallback": "none"
+    },
+    "--dsw-alias-fill-tsp-secondary": {
+      "readBy": [
+        "dsh-client-ui-agent-preset"
+      ],
+      "fallback": "none"
+    },
+    "--dsw-alias-font-mono": {
+      "readBy": [
+        "dsh-plugin-desktop"
+      ],
+      "fallback": "always",
+      "declined": "a FONT channel, not a colour: this theme restyles the reading typography (--dsw-font-markdown-*) and deliberately leaves the UI chrome face alone. Its fallback, `ui-monospace, monospace`, is already the right stack."
+    },
+    "--dsw-alias-label-error": {
+      "readBy": [
+        "dsh-client-ui-settings-plugins"
+      ],
+      "fallback": "none"
+    },
+    "--dsw-alias-label-quaternary": {
+      "readBy": [
+        "dsh-client-ui-agent-preset"
+      ],
+      "fallback": "none"
+    },
+    "--dsw-alias-link": {
+      "readBy": [
+        "dsh-client-ui-primitives"
+      ],
+      "fallback": "none"
+    },
+    "--dsw-alias-separator-primary": {
+      "readBy": [
+        "dsh-client-ui-chat"
+      ],
+      "fallback": "none"
+    },
+    "--dsw-alias-state-warning-primary": {
+      "readBy": [
+        "dsh-client-ui-settings-plugin-inventory",
+        "dsh-plugin-desktop"
+      ],
+      "fallback": "mixed"
+    }
+  },
+  "consumerScan": {
+    "scope": "packages that ship the DSH UI itself: @deepseek-ai/dsh-client-ui-*, dsh-web-frontend, dsh-plugin-desktop (which vendors the community market)",
+    "namesRead": 80,
+    "outsideScope": {
+      "note": "separately installed community plugins also read --dsw-alias-* names, several of which no published contract declares. They are counted here and deliberately NOT required: a theme cannot be responsible for a contract nobody publishes.",
+      "names": 1
+    }
+  }
 }

@@ -29,12 +29,23 @@ const path = require('path');
 const { loadClient } = require('./load-client');
 
 const ROOT = path.join(__dirname, '..');
-const allowlist = JSON.parse(fs.readFileSync(path.join(__dirname, 'token-allowlist.json'), 'utf8'));
+/* Overridable for the same reason lib/client.js is (test/selftest.js): a gate
+   that has never been shown to fail against a known-bad input is decoration.
+   The decline-recording check in particular can only be exercised by mutating
+   the generated file it reads. */
+const ALLOWLIST_PATH = process.env.HANA_ALLOWLIST || path.join(__dirname, 'token-allowlist.json');
+const allowlist = JSON.parse(fs.readFileSync(ALLOWLIST_PATH, 'utf8'));
 
 const { exports: client } = loadClient();
 const host = require(path.join(ROOT, 'lib', 'index.js'));
 
 const allowed = new Set(allowlist.tokens);
+/* Names a shipped UI READS but the registered contract does not declare. These
+   are not no-ops — most of the reads have no `var()` fallback, so declining the
+   name makes the declaration invalid at computed-value time and the property
+   disappears. Generated from the installed UI by the same tool, from the
+   REFERENCE side rather than the declaration side. */
+const unregisteredButRead = new Set(Object.keys(allowlist.consumedNotRegistered || {}));
 const PALETTES = client.PALETTES;
 
 const failures = [];
@@ -44,12 +55,78 @@ const check = (ok, message) => {
 
 /* 1 — every name has a reader in the harness */
 for (const { id: themeName, tokens } of PALETTES) {
-  const unknown = Object.keys(tokens).filter((name) => !allowed.has(name));
+  const unknown = Object.keys(tokens).filter((name) => !allowed.has(name) && !unregisteredButRead.has(name));
   check(
     unknown.length === 0,
     `${themeName} uses ${unknown.length} token name(s) absent from the harness allow-list ` +
       `(ui-theme ${allowlist.source.version}) — these would be silent no-ops: ${unknown.join(', ')}`,
   );
+}
+
+/* 1b — and every name a shipped UI READS must actually be supplied.
+ *
+ * The inverse of check 1, and the one that was missing. Check 1 only bounds the
+ * names a palette MAY use; on its own it is satisfied by supplying none of the
+ * unregistered ones, which is the state this project shipped in — with
+ * `--dsw-alias-link` read bare by `dsh-client-ui-primitives` and declared by
+ * nobody.
+ *
+ * `fallback` decides which obligation applies, and the tool measures it from
+ * the call site rather than assuming:
+ *   none/mixed  some read has NO fallback, so declining drops the declaration
+ *               outright — supplying it is mandatory
+ *   always      every read has a fallback, so declining degrades gracefully —
+ *               either supply it or record a reason in the tool's DECLINED_READS
+ */
+check(
+  unregisteredButRead.size > 0 || !allowlist.consumerScan,
+  'token-allowlist.json has no consumedNotRegistered — re-run `npm run refresh:allowlist`',
+);
+const UNREGISTERED = allowlist.consumedNotRegistered || {};
+for (const name of Object.keys(UNREGISTERED).sort()) {
+  const info = UNREGISTERED[name];
+  const readers = (info.readBy || []).join(', ');
+  const supplied = PALETTES.every((p) => typeof p.tokens[name] === 'string');
+  const missing = PALETTES.filter((p) => typeof p.tokens[name] !== 'string').map((p) => p.id);
+  if (info.fallback === 'always') {
+    check(
+      supplied || info.declined,
+      `${name} is read by ${readers} with a fallback on every read, so the theme may decline it — ` +
+        'but it must say so in DECLINED_READS (tools/refresh-allowlist.mjs) rather than say nothing',
+    );
+    check(
+      !supplied || !info.declined,
+      `${name} is BOTH supplied and recorded as declined — one of the two is stale`,
+    );
+  } else {
+    check(
+      supplied,
+      `${name} is read by ${readers} with no fallback (${info.fallback}) and is not supplied by ` +
+        `${missing.join(', ')} — the declaration is dropped, not defaulted`,
+    );
+  }
+}
+
+/* 1c — a bound alias must equal the role it names.
+ *
+ * lib/client.js derives each unregistered name from a role the palette already
+ * defines, so there is no second value to keep in step. Restating that map here
+ * would recreate the drift it exists to avoid, so the shipped map is read back
+ * and each binding is resolved against the shipped tables. */
+const BOUND = client.BOUND_ALIASES || {};
+for (const [name, source] of Object.entries(BOUND)) {
+  check(
+    unregisteredButRead.has(name),
+    `lib/client.js binds ${name}, but no installed UI reads it — the allow-list is stale ` +
+      'or the binding is obsolete, and an unread binding is a colour nobody asked for',
+  );
+  for (const { id: themeName, tokens } of PALETTES) {
+    check(
+      tokens[name] === tokens[source],
+      `${themeName}: ${name} is ${tokens[name]} but the role it is bound to, ${source}, is ` +
+        `${tokens[source]} — the binding and the palette have drifted apart`,
+    );
+  }
 }
 
 /* 2 — every palette covers the SAME names.
@@ -69,10 +146,18 @@ for (const { id: themeName, tokens } of PALETTES) {
   );
 }
 
-/* Coverage is reported, not required: defining fewer tokens than the harness
-   offers is a legitimate way to let the harness default show through. Silence
-   about a *gap* is what would be dangerous, so print the number. */
-const coverage = `${reference.length}/${allowed.size}`;
+/* Coverage is reported, not required: defining fewer REGISTERED tokens than the
+   harness offers is a legitimate way to let the harness default show through.
+   Silence about a *gap* is what would be dangerous, so print the number — and
+   split it, because `98/89` reads as an overrun until it is spelled out: the
+   registered set is what ui-theme declares, and the extra names are the ones a
+   shipped UI reads without a fallback (check 1b). */
+const registeredUsed = reference.filter((n) => allowed.has(n)).length;
+const coverage =
+  `${registeredUsed}/${allowed.size} registered` +
+  (reference.length > registeredUsed
+    ? ` + ${reference.length - registeredUsed} read-but-undeclared`
+    : '');
 
 /* 3 — the two halves agree on the settings defaults */
 const hostDefaults = host.FIELD_DEFAULTS;
@@ -184,6 +269,6 @@ if (failures.length) {
 }
 
 console.log(
-  `tokens: ${reference.length} tokens x ${PALETTES.length} palettes, all present in the ` +
-    `ui-theme ${allowlist.source.version} allow-list (coverage ${coverage})`,
+  `tokens: ${reference.length} tokens x ${PALETTES.length} palettes (${coverage}), ` +
+    `every one read by the shipped UI — against ui-theme ${allowlist.source.version}`,
 );

@@ -33,7 +33,6 @@ const { spawnSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const BUNDLE = path.join(ROOT, 'lib', 'client.js');
-const SUITE = path.join(__dirname, 'runtime.test.js');
 
 /**
  * Each mutation names the behaviour it breaks and the text that is supposed to
@@ -140,18 +139,72 @@ const MUTATIONS = [
     find: 'return paletteById(stored) === null ? null : stored;',
     replace: 'return paletteById(stored) === null ? "hana-paper" : stored;',
   },
+
+  /* ── the token gates (test/tokens.test.js) ────────────────────────────────
+   * These mutate DIFFERENT files, which is why a mutation may name its target
+   * and its suite. The P0 finding was that a name a shipped UI reads can be
+   * declared by nobody, and the failure is silent: `var()` with no fallback
+   * makes the declaration invalid at computed-value time, so the property
+   * disappears instead of defaulting. A gate for that has to be shown to fail
+   * when the supply is removed, or it is just decoration. */
+  {
+    id: 'read-name-not-supplied',
+    why: 'drops the binding that supplies --dsw-alias-link, the name dsh-client-ui-primitives reads with no fallback — links silently lose their colour',
+    suite: 'tokens',
+    marker: 'with no fallback',
+    find: '      "--dsw-alias-link": "--dsw-alias-brand-text",\n',
+    replace: '',
+  },
+  {
+    id: 'binding-points-at-a-role-that-does-not-exist',
+    why: 'typos the binding target, so the palette would gain a declaration whose value is `undefined` — a CSS custom property with no value, which is exactly the silent hole the binding exists to close',
+    suite: 'tokens',
+    marker: 'which that palette does not define',
+    find: '"--dsw-alias-separator-primary": "--dsw-alias-border-l1",',
+    replace: '"--dsw-alias-separator-primary": "--dsw-alias-border-l1-typo",',
+  },
+  {
+    id: 'declined-read-not-recorded',
+    why: 'strips the recorded decline for --dsw-alias-font-mono from the generated allow-list, so the theme neither supplies it nor says why — the exact "nobody noticed" state the ledger exists to prevent',
+    suite: 'tokens',
+    marker: 'must say so in DECLINED_READS',
+    file: 'test/token-allowlist.json',
+    /* The anchor starts at the comma so the removal leaves VALID JSON. Without
+       it the mutation fails as a parse error, which the suite does report — but
+       for the wrong reason, and a mutation caught by a syntax error proves
+       nothing about the gate it is supposed to exercise. */
+    find: ',\n      "declined": "a FONT channel, not a colour: this theme restyles the reading typography (--dsw-font-markdown-*) and deliberately leaves the UI chrome face alone. Its fallback, `ui-monospace, monospace`, is already the right stack."\n',
+    replace: '\n',
+  },
 ];
 
 const verbose = process.argv.includes('--verbose');
-const original = fs.readFileSync(BUNDLE, 'utf8');
+const SUITES = {
+  runtime: path.join(__dirname, 'runtime.test.js'),
+  tokens: path.join(__dirname, 'tokens.test.js'),
+};
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'hana-selftest-'));
 
-console.log(`selftest: ${MUTATIONS.length} mutations against test/runtime.test.js\n`);
+/** Original text of every file a mutation targets, read once. */
+const sources = new Map();
+const sourceOf = (rel) => {
+  const abs = path.isAbsolute(rel) ? rel : path.join(ROOT, rel);
+  if (!sources.has(abs)) sources.set(abs, fs.readFileSync(abs, 'utf8'));
+  return sources.get(abs);
+};
+
+const suiteNames = [...new Set(MUTATIONS.map((m) => m.suite || 'runtime'))];
+console.log(
+  `selftest: ${MUTATIONS.length} mutations against ` +
+    suiteNames.map((s) => 'test/' + s + '.test.js').join(' + ') + '\n',
+);
 
 let missed = 0;
 let inapplicable = 0;
 
 for (const m of MUTATIONS) {
+  const target = m.file || BUNDLE;
+  const original = sourceOf(target);
   const occurrences = original.split(m.find).length - 1;
 
   /* Guard one: a mutation that did not apply proves nothing. */
@@ -163,14 +216,24 @@ for (const m of MUTATIONS) {
     continue;
   }
 
+  /* The mutated copy is written to the scratch dir, never over the real file,
+     and HANA_BUNDLE points the suite at it. A mutation whose target is not the
+     bundle is written to a sibling copy so its path can be handed over too. */
   const mutated = original.replace(m.find, m.replace);
-  const file = path.join(scratch, `${m.id}.js`);
+  const file = path.join(scratch, `${m.id}${path.extname(target) || '.js'}`);
   fs.writeFileSync(file, mutated);
 
+  const suite = SUITES[m.suite || 'runtime'];
   const started = Date.now();
-  const run = spawnSync(process.execPath, [SUITE], {
+  const run = spawnSync(process.execPath, [suite], {
     encoding: 'utf8',
-    env: { ...process.env, HANA_BUNDLE: file },
+    env: {
+      ...process.env,
+      /* The bundle travels through HANA_BUNDLE (both loaders honour it) and a
+         generated data file through HANA_ALLOWLIST (test/tokens.test.js honours
+         it). Either way the real file is never written. */
+      ...(target === BUNDLE ? { HANA_BUNDLE: file } : { HANA_ALLOWLIST: file }),
+    },
     /* A mutated bundle can run away rather than fail politely — removing the
        override-identity guard produces unbounded re-layering, which churns for
        thirteen seconds before the stack finally gives. A HANG IS A FAILURE, so
@@ -221,15 +284,19 @@ for (const m of MUTATIONS) {
   fs.unlinkSync(file);
 }
 
-/* The baseline: the unmutated bundle must pass, or "it failed" means nothing. */
-const baseline = spawnSync(process.execPath, [SUITE], { encoding: 'utf8', timeout: 30000 });
-if (baseline.status !== 0) {
-  console.error('\nBASELINE FAILED — the unmutated bundle does not pass its own suite:');
-  console.error(`${baseline.stdout || ''}${baseline.stderr || ''}`);
-  missed += 1;
-} else {
-  console.log('\nbaseline      unmutated bundle passes');
+/* The baseline: the unmutated sources must pass every suite involved, or "it
+   failed" means nothing. */
+let baselineBad = 0;
+for (const name of suiteNames) {
+  const run = spawnSync(process.execPath, [SUITES[name]], { encoding: 'utf8', timeout: 30000 });
+  if (run.status !== 0) {
+    console.error(`\nBASELINE FAILED — the unmutated sources do not pass test/${name}.test.js:`);
+    console.error(`${run.stdout || ''}${run.stderr || ''}`);
+    baselineBad += 1;
+  }
 }
+if (baselineBad) missed += 1;
+else console.log(`\nbaseline      unmutated sources pass ${suiteNames.length} suite(s)`);
 
 fs.rmSync(scratch, { recursive: true, force: true });
 

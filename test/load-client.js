@@ -16,7 +16,12 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const BUNDLE = path.join(__dirname, '..', 'lib', 'client.js');
+/* test/selftest.js points HANA_BUNDLE at a mutated copy so a gate can be shown
+   to fail against a known-broken bundle. test/harness.js has honoured this from
+   the start; without it here the mutation suite could only ever exercise
+   test/runtime.test.js, which would leave the token gates as the one place a
+   broken supply could pass unnoticed. */
+const BUNDLE = process.env.HANA_BUNDLE || path.join(__dirname, '..', 'lib', 'client.js');
 
 function loadClient() {
   const source = fs.readFileSync(BUNDLE, 'utf8');
