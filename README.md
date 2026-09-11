@@ -158,6 +158,7 @@ nix develop                  # Node 24 + pnpm + jq, pinned to the host's nixpkgs
 npm test                     # static + allow-list + surface ledger + contrast + runtime + selftest
 npm run runtime              # just the runtime suite (the plugin is executed)
 npm run selftest:verbose     # mutations: which section catches which bug
+npm run verify:render        # in-engine: does a browser resolve the declared colours? (needs one)
 npm run refresh:allowlist    # re-derive the token allow-list from the installed DSH
 npm run allowlist:all        # every DSH install found, and its token count
 npm run refresh:surfaces     # re-scan every colour-carrying custom property in the DSH
@@ -240,6 +241,24 @@ The reverse direction matters just as much: **a surface claimed as `theme` must 
 **`test/runtime.test.js` — 82 assertions, with the plugin actually EXECUTED.** Every suite above reads source text or shipped tables; this one reads behaviour. That distinction matters more here than it usually would, because "the theme fails silently" is a runtime property: a token the presenter wipes, a listener that re-enters, a deferred re-apply that loses a race, a write that lands nowhere. None of those are visible in the text of a file, and the one severe bug in this project's history (§5.7, the four-layer settings-persistence chain) was made entirely of them. The lesson that bug produced was *"① explicit contract + ② visible durability state + ③ a judgement"* — ① and ② shipped long ago; **③ never did.**
 
 It guards eleven behaviours: contributing nothing until a palette is claimed; complete reversibility on unload; the syntax palette applied, following the palette rather than the colorScheme, replaced not merged on switch, and cleared on detach; the override layer rebuilt only when the choice changes; the §5.7 regression itself; the deferred re-apply asserted as an *ordering* guarantee; the settings write gate plus its visible warning; the panel rendering with controls wired to real rows; the master switch; a dark palette not being swapped for its light partner; and the four ornament switches, including that an out-of-range value falls back rather than writing a broken font shorthand.
+
+**`npm run verify:render` — the in-engine gate (needs a browser, so it is not in `npm test`).**
+
+It answers the one question the other gates cannot reach: *what did the browser actually resolve?* `contrast.test.js` proves the table is readable; `runtime.test.js` proves the plugin writes the right values; this proves the engine resolves them to what was written. A cascade mistake — a losing specificity, a `var()` that computes to nothing, a declaration dropped for sitting on `:root` — passes the first two and dies here.
+
+**It is deliberately not a pixel diff.** Fonts, hinting and the browser build vary by machine, so a pixel baseline either goes red for reasons that are not bugs or gets a tolerance loose enough to catch nothing. What matters is far narrower and completely deterministic: *the engine resolved these custom properties to these colours* — read out of `getComputedStyle` and required to match `lib/client.js` exactly.
+
+It also re-checks, in the engine, the property the syntax fix exists for: the variants marked `UNPINNED` (dark surface painted while the active colorScheme is still light) must resolve to **exactly the same** syntax colours as the pinned ones.
+
+The readings are written to `test/verify/render-baseline.json` and **committed** — so drift becomes a reviewable git diff. After changing a palette, the syntax layer, or upgrading DSH or the browser:
+
+```bash
+npm run verify:render          # compare against the baseline
+npm run verify:render:update   # rewrite it when the change was intended (read that diff)
+npm run verify:render:shot     # and keep a screenshot for a human
+```
+
+The inline styles in the probe come from **the real plugin**, not restated from the tables. A mutation test forced that: an earlier version assembled the style string itself, so deleting `applyShiki()` from `reconcile()` left this gate **green** — the page was still correct because the probe had painted it. The values now come from `test/harness.js` (drive the real bundle, click the real settings panel, read the inline map), so the chain is complete: **plugin writes → engine resolves**.
 
 **`test/selftest.js` — the mutation proof that the above is not vacuous.** A test that passes for the wrong reason looks exactly like one that passes for the right reason, and nothing in a green run tells them apart. This repo has already been on the wrong side of that: 91 contrast assertions were passing while an entire colour channel was unreadable.
 

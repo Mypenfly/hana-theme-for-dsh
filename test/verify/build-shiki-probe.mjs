@@ -81,24 +81,123 @@ const { createJavaScriptRegexEngine, defaultJavaScriptRegexConstructor } = await
   'shiki/engine/javascript',
 );
 const langTs = (await load('@shikijs/langs/typescript')).default;
+const langPy = (await load('@shikijs/langs/python')).default;
+const langMd = (await load('@shikijs/langs/markdown')).default;
 
 const highlighter = createHighlighterCoreSync({
   themes: [
     createCssVariablesTheme({ name: 'css-variables', variablePrefix: '--shiki-', fontStyle: true }),
   ],
-  langs: [langTs],
+  langs: [langTs, langPy, langMd],
   engine: createJavaScriptRegexEngine({ regexConstructor: defaultJavaScriptRegexConstructor }),
 });
 
-const SAMPLE = `// hana paper & ink
-const greeting: string = "hello";
-function shout(text: string): string {
-  return text.toUpperCase() + "!";
-}
-interface Point { x: number; y: number }
-export default shout(greeting);`;
+/**
+ * THREE samples, because no single grammar emits all nine token roles — found by
+ * running each and reading what came out, not by guessing:
+ *
+ *   python      constant, function, keyword, parameter, punctuation
+ *   markdown    keyword, link, string
+ *   typescript  comment, constant, keyword, string-expression
+ *
+ * Together they cover all nine, which is what lets render-check.mjs demand a
+ * resolved colour for every one of them. A sample that misses a role would make
+ * the gate silently narrower: the missing colour could stop resolving and
+ * nothing would say so.
+ */
+const SAMPLES = [
+  {
+    lang: 'python',
+    code: `# hana, in python
+def greet(name: str, count: int) -> str:
+    return name * count`,
+  },
+  {
+    lang: 'markdown',
+    /* The inline code span is not decoration: it is the only construct in the
+       markdown grammar that emits the `string` role, verified by running the
+       grammar rather than assumed. Drop it and a colour silently leaves the
+       gate — which is what the build-time check below is for. */
+    code: `# Notes
 
-const MARKUP = highlighter.codeToHtml(SAMPLE, { lang: 'typescript', theme: 'css-variables' });
+See the [design language](https://example.com/hana) and run \`hana build\`.`,
+  },
+  {
+    lang: 'typescript',
+    code: `// hana, in typescript
+const greeting: string = "hello";
+export default greeting;`,
+  },
+];
+
+const MARKUP = SAMPLES.map((s) =>
+  highlighter.codeToHtml(s.code, { lang: s.lang, theme: 'css-variables' }),
+).join('\n');
+
+/** Every syntax role the samples are expected to exercise. */
+const EXPECTED_ROLES = [
+  'comment',
+  'constant',
+  'function',
+  'keyword',
+  'link',
+  'parameter',
+  'punctuation',
+  'string',
+  'string-expression',
+];
+
+/* Fail here, at BUILD time, if a shiki or grammar upgrade stops emitting one of
+   the roles — rather than upstream, where it would look like the theme's bug. */
+const emitted = new Set(
+  [...MARKUP.matchAll(/var\(--shiki-token-([a-z-]+)\)/g)].map((m) => m[1]),
+);
+const missingRoles = EXPECTED_ROLES.filter((r) => !emitted.has(r));
+if (missingRoles.length) {
+  throw new Error(
+    `the probe samples no longer exercise: ${missingRoles.join(', ')} — the shiki theme or a ` +
+      'grammar changed; widen the samples so render-check still covers every syntax role',
+  );
+}
+
+/* ── what the plugin actually writes ──────────────────────────────────────
+ *
+ * The inline properties on <body> are taken from a DRIVEN plugin, not restated
+ * from the tables. That matters: an earlier version of this file built the
+ * style string itself out of `{...palette.tokens, ...SHIKI[id]}`, which meant
+ * the probe could not tell whether the plugin ever applied them. Deleting
+ * applyShiki() from reconcile() left this gate GREEN — the page was still
+ * painted correctly because the probe had painted it.
+ *
+ * Now the values come from test/harness.js: apply the real bundle, claim the
+ * palette through the real settings panel, and read the resulting inline map.
+ * The chain the gate covers is therefore complete — plugin writes → engine
+ * resolves — and a plugin that stops writing fails HERE as well as in
+ * runtime.test.js.
+ */
+const { createEnvironment } = require(path.join(REPO, 'test', 'harness.js'));
+
+function inlineFromPlugin(paletteId) {
+  const env = createEnvironment();
+  env.assertLive();
+  env.apply();
+  env.claimPalette(paletteId);
+  const inline = env.document.body.style._dump();
+  if (Object.keys(inline).length === 0) {
+    throw new Error(
+      `the plugin wrote nothing inline for ${paletteId} — the probe would render a page the ` +
+        'plugin never produced, and every colour assertion below would be vacuous',
+    );
+  }
+  const syntax = Object.keys(inline).filter((k) => k.startsWith('--shiki-'));
+  if (syntax.length !== 11) {
+    throw new Error(
+      `the plugin wrote ${syntax.length} of 11 syntax properties for ${paletteId}; ` +
+        'render-check would then be measuring a page this plugin did not produce',
+    );
+  }
+  return inline;
+}
 
 /* ── variant documents ────────────────────────────────────────────────── */
 const inlineTokens = (tokens) =>
@@ -117,12 +216,11 @@ function variantDoc(palette, { dark }) {
     .filter(Boolean)
     .join(' ');
 
-  /* Exactly what reconcile() writes: the 89 palette tokens AND the eleven syntax
-     names, both as INLINE properties on <body>. The inline syntax layer is the
-     fix under test — with it present the syntax colours follow the chosen
-     palette, so the UNPINNED variant (no body[data-ds-dark-theme]) renders the
-     same syntax colours as the pinned one instead of the built-in light set. */
-  const inline = { ...palette.tokens, ...(hana.SHIKI[palette.id] || {}) };
+  /* The real inline map, straight out of the plugin. The syntax layer is the fix
+     under test — with it present the syntax colours follow the chosen palette,
+     so the UNPINNED variant (no body[data-ds-dark-theme]) renders the same
+     syntax colours as the pinned one instead of the built-in light set. */
+  const inline = inlineFromPlugin(palette.id);
 
   // The wrapper carries BOTH `block` and `md-code-block`: the app renders the
   // CSS-Module local name hashed (`Q7WfXG_block`) while hana's own rule targets
@@ -207,15 +305,48 @@ window.addEventListener('load', () => {
   });
   out.textContent = lines.map((l) => l.t).join('\\n');
   out.dataset.fail = String(lines.filter((l) => !l.head && l.bad).length);
+
+  /* The same numbers as DATA, so a gate can compare them instead of a human
+     reading pixels. The screenshot is for the human; this is for the build. */
+  window.__HANA_REPORT__ = {
+    results: frames.map((f) => {
+      const m = measure(f);
+      if (!m) return { variant: f.dataset.variant, rendered: false };
+      return {
+        variant: f.dataset.variant,
+        rendered: true,
+        codeBg: hex(m.codeBg),
+        pageBg: hex(m.pageBg),
+        belowAA: m.rows.filter((r) => r.r < 4.5).length,
+        tokens: Object.fromEntries(m.rows.map((r) => [r.name, hex(r.col)])),
+      };
+    }),
+  };
+
+  /* Posted when served over http (test/verify/render-check.mjs); absent for a
+     plain file:// screenshot, which is fine — the report is then only visual. */
+  if (location.protocol.indexOf('http') === 0) {
+    fetch('/report', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(window.__HANA_REPORT__),
+    }).catch(function () {});
+  }
 });
 `;
 
-const html = `<!doctype html><html><head><meta charset="utf-8"><title>hana shiki probe</title>
+/**
+ * The probe page, as a string, plus what it is built from — exported so
+ * test/verify/render-check.mjs can serve it and read the measurements back
+ * without duplicating any of the assembly.
+ */
+export function buildProbeHtml() {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>hana shiki probe</title>
 <style>
   body{margin:0;font:13px system-ui;background:#1b1b1b;color:#eee}
   section{padding:8px}
   h2{font:12px ui-monospace,monospace;margin:2px 0;color:#7cc}
-  iframe{width:700px;height:250px;border:1px solid #555;background:#fff}
+  iframe{width:700px;height:430px;border:1px solid #555;background:#fff}
   #report{white-space:pre;font:15px/1.45 ui-monospace,monospace;color:#dfe;
           background:#111;padding:14px;margin:0}
 </style></head><body>
@@ -230,7 +361,32 @@ document.querySelectorAll('iframe').forEach((f, i) => { f.srcdoc = DOCS[i]; });
 ${REPORT_SCRIPT}
 </script>
 </body></html>`;
+}
 
-fs.writeFileSync(OUT, html);
-console.log('wrote', path.relative(REPO, OUT));
-console.log('variants:', VARIANTS.map((v) => v.id).join(' | '));
+/** What the engine is expected to resolve, derived from the SHIPPED tables. */
+export function expectedMeasurements() {
+  const out = {};
+  for (const p of hana.PALETTES) {
+    out[p.id] = {
+      codeBg: p.tokens['--dsw-alias-markdown-code-block'],
+      pageBg: p.tokens['--dsw-alias-bg-base'],
+      tokens: Object.fromEntries(
+        Object.entries(hana.SHIKI[p.id])
+          .filter(([name]) => name.startsWith('--shiki-token-'))
+          .map(([name, value]) => [name.replace('--shiki-token-', ''), value]),
+      ),
+    };
+  }
+  return out;
+}
+
+export const PROBE_VARIANTS = VARIANTS;
+export const PROBE_PALETTES = hana.PALETTES;
+
+/* ── CLI: write the standalone page for a manual screenshot ─────────────── */
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain) {
+  fs.writeFileSync(OUT, buildProbeHtml());
+  console.log('wrote', path.relative(REPO, OUT));
+  console.log('variants:', VARIANTS.map((v) => v.id).join(' | '));
+}

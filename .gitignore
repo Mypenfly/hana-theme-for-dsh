@@ -30,6 +30,10 @@ test/settings-probe.json
 test/verify/shiki-probe.html
 test/verify/probe.png
 
+# The render BASELINE is committed on purpose: it is the record of what a real
+# engine resolved, so a drift shows up as a reviewable git diff. Everything
+# above is regenerable output; this is evidence.
+
 # A throwaway Firefox profile, created in-tree so headless rendering works in a
 # sandbox with no writable HOME.
 .verify-profile/
