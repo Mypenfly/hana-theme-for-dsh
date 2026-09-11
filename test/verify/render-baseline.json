@@ -5,73 +5,73 @@
     {
       "variant": "hana-paper · pinned",
       "rendered": true,
-      "codeBg": "#f5f1e8",
+      "codeBg": "#e9e7de",
       "pageBg": "#f5efe4",
       "belowAA": 0,
       "tokens": {
-        "comment": "#686f77",
-        "string": "#257c35",
-        "parameter": "#b64609",
-        "constant": "#1663a8",
-        "string-expression": "#226c31",
-        "keyword": "#ad2353",
-        "link": "#145998",
-        "function": "#4a25b8",
-        "punctuation": "#393f44"
+        "comment": "#616970",
+        "string": "#237532",
+        "parameter": "#ab4209",
+        "constant": "#155d9e",
+        "string-expression": "#20662e",
+        "keyword": "#a3214e",
+        "link": "#12538f",
+        "function": "#4523ae",
+        "punctuation": "#363b40"
       }
     },
     {
       "variant": "hana-midnight · pinned",
       "rendered": true,
-      "codeBg": "#4a5a65",
+      "codeBg": "#495863",
       "pageBg": "#3b4a54",
       "belowAA": 0,
       "tokens": {
-        "constant": "#a2d3fb",
-        "function": "#d6c8fd",
-        "comment": "#d4d8dc",
-        "link": "#b6defd",
-        "parameter": "#ffd2a2",
-        "keyword": "#fccede",
-        "string": "#b0ecba",
-        "string-expression": "#c3f3ca",
-        "punctuation": "#e5e8ec"
+        "constant": "#9cd1fb",
+        "function": "#d4c5fd",
+        "comment": "#d2d6da",
+        "link": "#b2dcfd",
+        "parameter": "#ffcf9c",
+        "keyword": "#fcccdd",
+        "string": "#acebb6",
+        "string-expression": "#bff3c7",
+        "punctuation": "#e4e7eb"
       }
     },
     {
       "variant": "hana-midnight · UNPINNED",
       "rendered": true,
-      "codeBg": "#4a5a65",
+      "codeBg": "#495863",
       "pageBg": "#3b4a54",
       "belowAA": 0,
       "tokens": {
-        "constant": "#a2d3fb",
-        "function": "#d6c8fd",
-        "comment": "#d4d8dc",
-        "link": "#b6defd",
-        "parameter": "#ffd2a2",
-        "keyword": "#fccede",
-        "string": "#b0ecba",
-        "string-expression": "#c3f3ca",
-        "punctuation": "#e5e8ec"
+        "constant": "#9cd1fb",
+        "function": "#d4c5fd",
+        "comment": "#d2d6da",
+        "link": "#b2dcfd",
+        "parameter": "#ffcf9c",
+        "keyword": "#fcccdd",
+        "string": "#acebb6",
+        "string-expression": "#bff3c7",
+        "punctuation": "#e4e7eb"
       }
     },
     {
       "variant": "hana-coral · pinned",
       "rendered": true,
-      "codeBg": "#f7efe6",
+      "codeBg": "#f4ece4",
       "pageBg": "#fdf6ec",
       "belowAA": 0,
       "tokens": {
-        "comment": "#676e76",
-        "string": "#257b35",
-        "parameter": "#b44509",
-        "constant": "#1662a6",
-        "string-expression": "#216b30",
-        "keyword": "#ac2352",
-        "link": "#135897",
-        "function": "#4925b7",
-        "punctuation": "#393e44"
+        "comment": "#656c74",
+        "string": "#247934",
+        "parameter": "#b14409",
+        "constant": "#1560a3",
+        "string-expression": "#21692f",
+        "keyword": "#a92251",
+        "link": "#135694",
+        "function": "#4824b4",
+        "punctuation": "#383d42"
       }
     },
     {
