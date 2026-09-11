@@ -80,7 +80,7 @@ Installed but inert:
 
 ## What it changes, and what it refuses to change
 
-**Changes.** The 89 alias/specific colour tokens for whichever palette is active, and — while a hana palette is claimed and 衬线阅读体 is on — the font *family* of markdown reading text, plus the opt-in ornament layer.
+**Changes.** The 89 alias/specific colour tokens for whichever palette is active, **the eleven syntax-highlighting variables for that same palette** (comments, keywords, strings and the rest inside code blocks — see below), and — while a hana palette is claimed and 衬线阅读体 is on — the font *family* of markdown reading text, plus the opt-in ornament layer.
 
 **Refuses.** Everything else, and the most important behaviour here is a negative one: **while no hana palette is claimed, the plugin contributes nothing at all** — no stylesheet, no body attribute, no token layer. Installing it cannot repaint the built-in themes and cannot leak typography into another skin.
 
@@ -144,6 +144,10 @@ Established by reading the installed harness rather than its documentation. Most
 - **`--dsw-alias-toast-bg` is dead.** The toast surface is `--dsw-alias-button-contrast-fill` paired with `--dsw-alias-label-primary-inverted`.
 - **Raw HTML never enters the DOM.** DSH replaced react-markdown with a direct mdast→React renderer whose policy is "raw HTML renders as literal text". GitHub-style `[!NOTE]` callouts can therefore never be styled — see *Not done* below.
 - **The markdown root class is a build hash** (`_markdown_177e0_5`). Markdown rules anchor on `[data-chat-flow-kind='assistant-step']` instead, confirmed against a live page rather than assumed.
+- **Code syntax colours are a second channel, and they are inline.** shiki writes `style="color:var(--shiki-token-X)"`, so **no stylesheet rule can reach them** — inline beats any selector. The only way to change a syntax colour is to change the *value* of those custom properties. And the harness declares them on `:root` (light) and `body[data-ds-dark-theme]` (dark), i.e. following **colorScheme**, while the code block's *surface* follows the **palette**. Two independent choices that nothing had ever checked against each other.
+- **`--shiki-foreground` as declared on `:root` is broken.** Its value is `var(--dsw-alias-label-primary)`, and that alias is only ever written on `body`; a custom property's `var()` resolves **on the element that declares it**, so on `:root` it computes to nothing and the whole declaration is dropped — code text is readable only because `color` happens to fall back to inheritance. Writing it inline on `body` sidesteps this.
+- **The `--dsw-static-*` ramp is a foundation, not a surface.** Re-tinting it does scrub brand residue, but it changes every consumer at once, including ones this theme has never measured — so this theme works through the alias layer and records all 73 ramp names as `harness` in the ledger.
+- **`--dsh-state-ongoing` is out of reach.** Pinned to `--dsw-static-deepseek-450` and declared on the component class `.dot, .matrix`, so a body-level rule cannot out-inherit it and the class name hashes per build. Recorded as a known leak rather than pretended away.
 
 ## Development
 
@@ -151,9 +155,12 @@ The only toolchain needed is Node and pnpm, and there is **no build step** — `
 
 ```bash
 nix develop                  # Node 24 + pnpm + jq, pinned to the host's nixpkgs
-npm test                     # allow-list + contrast + static checks
+npm test                     # static checks + allow-list + colour-surface ledger + contrast
 npm run refresh:allowlist    # re-derive the token allow-list from the installed DSH
 npm run allowlist:all        # every DSH install found, and its token count
+npm run refresh:surfaces     # re-scan every colour-carrying custom property in the DSH
+npm run surfaces:list        # print the ledger: who owns each surface
+npm run derive:shiki         # re-derive the four syntax-highlighting palettes
 npm run probe                # print the Phase 0 DOM probe for the DevTools console
 ```
 
@@ -161,31 +168,89 @@ npm run probe                # print the Phase 0 DOM probe for the DevTools cons
 
 ```
 lib/index.js     Host half — the durable settings namespace
-lib/client.js    Client half — palettes, stylesheet, settings panel (the shipped artifact)
+lib/client.js    Client half — palettes, syntax palettes, stylesheet, settings panel (the artifact)
 test/            the gates
-tools/           refresh-allowlist.mjs, which generates test/token-allowlist.json
+test/verify/     in-engine verification scaffolding (not a gate — see below)
+tools/           refresh-allowlist.mjs / scan-color-surfaces.mjs / derive-shiki.mjs
 docs/            the research and design documents this implementation follows
 ```
+
+**`test/verify/` is measurement scaffolding, not a gate.** The contrast assertions compute numbers from the tables; these scripts answer a different question — *what did the browser actually render?* `shiki-mechanism.mjs` runs the harness's own highlighter and prints the markup it really produces. `build-shiki-probe.mjs` assembles a page out of nothing but shipped artifacts (the real stylesheets, the real tokens, real shiki output, the real `CodeBlock.module.css`), renders it headlessly, and **prints the computed styles the engine reports back into the page**, so one screenshot carries measured numbers out of the browser. That is how the code-block defect was found while 91 assertions were passing.
+
+## Syntax highlighting in code blocks
+
+This is the theme's **second colour channel**, and the one that was genuinely missed.
+
+DSH highlights code with shiki's `css-variables` theme, and the harness says so itself: *"All token colors resolve through `--shiki-*` custom properties."* Running the harness's own highlighter shows exactly that — every coloured span is `style="color:var(--shiki-token-X)"`, 39 inline style attributes, 7 distinct variables, **zero literal colours**.
+
+The trouble is that two **independent** choices meet here:
+
+| | decided by |
+|---|---|
+| the code block's **surface** | this theme, per palette (`--dsw-alias-markdown-code-block`) |
+| the code block's **syntax colours** | the harness, per **colorScheme** (`:root`, then `body[data-ds-dark-theme]`) |
+
+Nothing had ever checked one against the other. **Measured in a real engine** (`test/verify/build-shiki-probe.mjs`): in three of the four palettes, 4 of the 5 token colours a sample exercises were below AA, worst **2.88:1** — while the suite reported 91 passing assertions.
+
+There is a sharper version of the same bug. `body[data-ds-dark-theme]` comes from the **active theme's** colorScheme, while the palette arrives on an override layer, so there is a window in which the dark surface is already painted but the preference is not yet pinned. **In that window the light syntax palette lands on the dark code surface** — measured, 5 of 5 below AA, worst **1.13:1**, which is to say invisible.
+
+The fix pins all eleven names **per palette**, inline on `body` (the same channel the reading-size factor and grain intensity already use), so the syntax colours follow the palette the user chose rather than the colorScheme. That window cannot render wrong any more.
+
+The values come from `tools/derive-shiki.mjs`, not from taste: hue and saturation stay the harness's own (token roles must stay recognisable) and **one shared factor** moves the whole set proportionally toward the extreme its surface calls for. The shared factor is what keeps a palette a palette — **lifting each colour to exactly 4.5:1 was tried and rejected**, because it collapses all nine onto one luminance and makes comments as loud as keywords. The transform is asymptotic, so it can never clip to pure black or white and quietly drop a hue. All 36 pairs now clear AA; worst 4.50:1. Measured after the fix, the pinned and unpinned states render identically.
+
+| palette | code surface | syntax contrast range |
+|---|---|---|
+| paper | `#F5F1E8` | 4.51 – 9.46 |
+| midnight | `#4A5A65` | 4.50 – 5.81 |
+| coral | `#F7EFE6` | 4.53 – 9.48 |
+| vivid | `#2E3F49` | 4.50 – 7.43 |
+
+Midnight's narrow range is the honest cost of its **code surface being light** (`#4A5A65`, a mid-tone slate): a mid-tone background compresses any foreground palette. Recovering the differentiation means darkening that surface (say `#2A3A44`, the same separation from the `#3B4A54` page ground but in the other direction), at the cost of turning code blocks from raised light cards into sunken dark wells — **that is a look change, so it is left to you** rather than made on your behalf.
+
 
 ## The tests are the point
 
 A theme fails *silently*. A misspelled token is accepted without complaint and read by nobody; a stray character makes the browser drop one rule and carry on; a stylesheet colour looks correct right up until another token-writing plugin is installed. So the checks here are not ceremony.
 
-**`test/contrast.test.js` — 91 assertions.** 19 pairs × 4 palettes, per-scheme foreground polarity, a link-readability band, and a compositing model for the paper grain. Values are read out of the shipped tables, never a second copy. Run with `--verbose` to print every measured pair.
+**`test/contrast.test.js` — 131 assertions.** 19 pairs × 4 palettes, per-scheme foreground polarity, a link-readability band, a compositing model for the paper grain, and **the code-block syntax colours: 9 tokens × 4 palettes plus 4 "the palette was not flattened" assertions**. Values are read out of the shipped tables, never a second copy. Run with `--verbose` to print every measured pair.
 
-**`test/check.js` — 78 static judgements.** No hash-shaped selectors, nothing declared on `:root`, no registered colour token declared in the stylesheet, no `--hana-*` token that nothing reads, no `settingsScope.bind()` with a bare string, no synchronous `setTheme()` in a `theme/change` listener, an idempotent override layer, every runtime path present in `files`, and a `ctx.effect` disposer chain that releases every side effect.
+**`test/check.js` — 82 static judgements.** No hash-shaped selectors, nothing declared on `:root`, no registered colour token declared in the stylesheet, no `--hana-*` token that nothing reads, no `settingsScope.bind()` with a bare string, no synchronous `setTheme()` in a `theme/change` listener, an idempotent override layer, every runtime path present in `files`, a `ctx.effect` disposer chain that releases every side effect, and the syntax palette applied on the palette path and released on the detach path. The new judgements were mutation-tested: delete `applyShiki()` or `clearShiki()` and the build must fail.
 
-**`test/tokens.test.js`** — every colour token name must appear in an allow-list generated from the installed harness, and all four palettes must cover the same names.
+**`test/surfaces.test.js` — the colour-surface ledger, 195 entries.** This is the one assertion *about the test suite itself*, and it is the real lesson from that defect.
 
-The suite has earned its keep. It has caught a load-time crash, three dead tokens in this theme's own palette, a dead `--hana-*` token, a packaging gap that only a registry install would have hit, and — after the settings-persistence bug — it now refuses to build if the settings scope is bound with a bare string.
+The 19 assertion pairs were **hand-picked**. A hand-picked list can only ever cover surfaces somebody thought of, so whatever nobody thought of stays unmeasured however green the suite is. The code-block syntax colours are the proof: never on the list, in a theme that is precisely the thing choosing the code block's surface.
+
+So the fix was not "add the pairs we missed" but **enumerate from the artifact**: `tools/scan-color-surfaces.mjs` scans every colour-carrying custom property in the installed harness — a colour literal *or* a `var()` reference to a colour token, since `--shiki-foreground` is the latter and a literal-only scan misses the code block's ink — and requires a **recorded decision** for each:
+
+| class | count | meaning |
+|---|---|---|
+| `theme` | 103 | this theme must supply it, and does |
+| `derived` | 4 | the harness declares it as a reference to a token this theme owns, so it follows |
+| `harness` | 82 | the harness owns it and this theme must not write it (it adapts per mode, or is unreachable without pinning a build hash) |
+| `boot` | 6 | the boot splash, painted before any client plugin mounts |
+
+An `UNCLASSIFIED` entry fails the build, so **when a DSH upgrade introduces a new colour surface the decision gets made on purpose instead of by omission.** It immediately caught five surfaces nobody had seen, one of which is worth naming: `--dsh-state-ongoing` (the ongoing-state dot) is pinned to the raw ramp `var(--dsw-static-deepseek-450)` — the harness's own comment says *"Ongoing blue has no alias token"*. It is declared on the component class `.dot, .matrix`, so a body-level rule cannot out-inherit it, and that class name hashes per build. Reaching it would mean pinning a build hash, which judgements 5 and 16 forbid. So it is recorded as a **known, deliberate leak**: a brand-blue dot on the ongoing state, in every palette.
+
+The reverse direction matters just as much: **a surface claimed as `theme` must actually be supplied**, or the ledger drifts into fiction — which is worse than having none, because it makes the gap look closed.
+
+**`test/tokens.test.js`** — every colour token name must appear in an allow-list generated from the installed harness, all four palettes must cover the same names, the eleven syntax names must match the harness's declared set exactly (also generated, by `refresh-allowlist.mjs`), and `--shiki-background` must equal the `--dsw-alias-markdown-code-block` it is painted on.
+
+The suite has earned its keep. It has caught a load-time crash, three dead tokens in this theme's own palette, a dead `--hana-*` token, a packaging gap that only a registry install would have hit, after the settings-persistence bug it now refuses to build if the settings scope is bound with a bare string, and now **an entire colour channel**.
 
 ## Compatibility
 
-Verified against **DeepSeek Harness Desktop 2.0.5 / 2.0.6** with **`@deepseek-ai/dsh-client-ui-theme` 0.1.2-rc.1** (89 colour tokens). `package.json` declares the tested range `0.1.2-rc.1 – 0.1.5-alpha.1`; the later version adds exactly one token (`--dsw-alias-link`), which this theme does not use and which the allow-list records as version-dependent.
+Verified against **DeepSeek Harness Desktop 2.0.5 / 2.0.6** with **`@deepseek-ai/dsh-client-ui-theme` 0.1.2-rc.1** (89 colour tokens + 11 syntax variables). `package.json` declares the tested range `0.1.2-rc.1 – 0.1.5-alpha.1`; the later version adds exactly one token (`--dsw-alias-link`), which this theme does not use and which the allow-list records as version-dependent.
 
-Stable anchors relied on: the 89 registered token names, `--dsw-font-markdown-*`, `--dsh-content-font-size`, `body[data-ds-dark-theme]`, `md-code-block`, `md-table-wide`, `data-chat-flow-kind`, `data-composer-card`, `settings.section`.
+Stable anchors relied on: the 89 registered token names, the 11 `--shiki-*` names, `--dsw-font-markdown-*`, `--dsh-content-font-size`, `body[data-ds-dark-theme]`, `md-code-block`, `md-table-wide`, `data-chat-flow-kind`, `data-composer-card`, `settings.section`.
 
-After a harness upgrade run `npm run refresh:allowlist` and read the diff. **A token that disappears is an override that silently stopped working.**
+After a harness upgrade run both of these and **read the diffs**:
+
+```bash
+npm run refresh:allowlist     # token names; one that disappears is an override that stopped working
+npm run refresh:surfaces      # colour surfaces; a new one arrives as UNCLASSIFIED and fails the build
+```
+
+The second is new, and it exists because of the code-block defect: **a new colour surface can no longer slip through unnoticed** — it turns up in the ledger demanding a decision.
 
 ## Not done, and why
 
@@ -193,6 +258,9 @@ After a harness upgrade run `npm run refresh:allowlist` and read the diff. **A t
 - **Motion.** Deliberately out of scope. The eight keyframes are trivial; the risk is re-triggering entrance animations during streaming, which is exactly where motion bugs live and exactly where they cannot be seen without watching a long generation.
 - **Weather mode** (HanaAgent's 2.38 MB video layer). Technically feasible, but it would break this plugin's zero-binary-resource property for an optional effect.
 - **Bundled fonts.** HanaAgent ships 6.5 MB, 6.0 MB of it CJK. The system serif stack gets most of the way for nothing.
+- **Midnight's code surface was not darkened.** See the end of the syntax-highlighting section: darkening it would restore the syntax palette's differentiation, but it is a look change and is left to you.
+- **`--dsh-state-ongoing` is still brand blue.** Unreachable (see the traps list), recorded in the ledger rather than papered over.
+- **Interface font size.** There is no token channel for it (64 hardcoded px values, measured), so the app's own Electron zoom is the answer; a CSS `zoom` replica is deliberately not shipped.
 
 ## License
 

@@ -50,14 +50,20 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node test/check.js && node test/tokens.test.js && node test/contrast.test.js",
+    "test": "node test/check.js && node test/tokens.test.js && node test/surfaces.test.js && node test/contrast.test.js && node tools/derive-shiki.mjs --check",
     "check": "node test/check.js",
     "tokens": "node test/tokens.test.js",
+    "surfaces": "node test/surfaces.test.js",
     "contrast": "node test/contrast.test.js",
     "refresh:allowlist": "node tools/refresh-allowlist.mjs",
     "allowlist:all": "node tools/refresh-allowlist.mjs --all",
+    "refresh:surfaces": "node tools/scan-color-surfaces.mjs",
+    "surfaces:list": "node tools/scan-color-surfaces.mjs --list",
+    "derive:shiki": "node tools/derive-shiki.mjs",
+    "shiki:check": "node tools/derive-shiki.mjs --check",
     "probe": "node test/dom-probe.js --print",
-    "allowlist:check": "node tools/refresh-allowlist.mjs --check"
+    "allowlist:check": "node tools/refresh-allowlist.mjs --check",
+    "surfaces:check": "node tools/scan-color-surfaces.mjs --check"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"

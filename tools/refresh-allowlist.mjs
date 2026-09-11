@@ -152,6 +152,27 @@ function extractStylesheet(src) {
   return readStringLiteral(src, q)
 }
 
+/**
+ * The shiki syntax sheet, which lives in its own bundle constant.
+ *
+ * These names matter as much as the colour tokens and for the same reason: a
+ * misspelled `--shiki-token-*` is accepted by nothing and read by nothing, so it
+ * fails silently. They cannot be folded into the colour list — that list is
+ * filtered to the alias and specific families, and these are a different
+ * channel entirely (see L1b in lib/client.js). Recorded separately so
+ * test/tokens.test.js can pin the plugin's syntax palette to the names the
+ * installed harness actually declares.
+ */
+function extractShikiSheet(src) {
+  const marker = 'shiki_css_default'
+  const at = src.indexOf(marker)
+  if (at < 0) return null
+  let q = src.indexOf('=', at) + 1
+  while (q < src.length && src[q] !== '"' && src[q] !== "'") q += 1
+  const css = readStringLiteral(src, q)
+  return [...new Set(cssBlocks(css).flatMap((b) => declaredVars(b.body)))].sort()
+}
+
 const cssBlocks = (css) =>
   [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }))
 
@@ -166,7 +187,8 @@ const declaredVars = (body) =>
  * harvests the font block and reports zero colours.
  */
 function readPalette(clientPath) {
-  const css = extractStylesheet(readFileSync(clientPath, 'utf8'))
+  const source = readFileSync(clientPath, 'utf8')
+  const css = extractStylesheet(source)
   const all = cssBlocks(css)
   const union = (blocks) => [...new Set(blocks.flatMap((b) => declaredVars(b.body)))]
     .filter((n) => COLOR_FAMILY.test(n)).sort()
@@ -191,7 +213,14 @@ function readPalette(clientPath) {
     }
     dir = dirname(dir)
   }
-  return { clientPath, version, light, dark: union(darkBlocks), blocks: all }
+  return {
+    clientPath,
+    version,
+    light,
+    dark: union(darkBlocks),
+    syntax: extractShikiSheet(source) || [],
+    blocks: all,
+  }
 }
 
 /* ── main ───────────────────────────────────────────────────────────────── */
@@ -265,6 +294,7 @@ const payload = {
     derivedFrom: 'design_platform_css_default: body{…} ∪ body[data-ds-dark-theme]{…}, --dsw-alias-* and --dsw-specific-* only',
     lightCount: chosen.light.length,
     darkCount: chosen.dark.length,
+    syntaxCount: chosen.syntax.length,
   },
   ...(versionDependent.length
     ? {
@@ -274,6 +304,7 @@ const payload = {
       }
     : {}),
   tokens: chosen.light,
+  ...(chosen.syntax.length ? { syntaxTokens: chosen.syntax } : {}),
 }
 
 const serialized = JSON.stringify(payload, null, 2) + '\n'

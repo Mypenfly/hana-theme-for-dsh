@@ -215,6 +215,96 @@ for (const [themeName, tokens] of Object.entries(THEMES)) {
   }
 }
 
+/* ── #26/#27 — syntax highlighting ──────────────────────────────────────────
+ *
+ * WHY THIS SECTION EXISTS, AND WHY IT DID NOT BEFORE
+ *
+ * The 23 assertion pairs above are a HAND-PICKED list. That is a real weakness:
+ * it can only ever cover surfaces somebody thought of, so whatever nobody
+ * thought of is unmeasured however green the suite is. This section is the
+ * proof — the code block's syntax colours were never in the list, even though
+ * the theme is the thing that chooses the code block's *surface*.
+ *
+ * DSH highlights code with shiki's `css-variables` theme, so every coloured
+ * span carries `style="color:var(--shiki-token-X)"`. The harness declares those
+ * eleven on `:root` and switches nine of them on `body[data-ds-dark-theme]` —
+ * i.e. they follow the active *colorScheme*, while the surface they sit on
+ * follows the chosen *palette*. Measured in a real engine before this section
+ * was written (test/verify/build-shiki-probe.mjs), that mismatch left 4 of the
+ * 5 token colours a sample exercises below AA in three of the four palettes,
+ * worst 2.88:1, and 5 of 5 below AA (worst 1.13:1) in the window where a dark
+ * palette is painted before the preference is pinned.
+ *
+ * The fix is L1b in lib/client.js: hana pins all eleven for the claimed
+ * palette. These assertions are what keep that honest.
+ */
+const SYNTAX_TOKENS = [
+  '--shiki-token-constant',
+  '--shiki-token-string',
+  '--shiki-token-string-expression',
+  '--shiki-token-comment',
+  '--shiki-token-keyword',
+  '--shiki-token-parameter',
+  '--shiki-token-function',
+  '--shiki-token-punctuation',
+  '--shiki-token-link',
+];
+
+const SHIKI = client.SHIKI;
+let syntaxAssertions = 0;
+const syntaxSpreads = [];
+
+for (const p of PALETTES) {
+  const table = SHIKI[p.id];
+  if (!table) {
+    failures.push(`#26 ${p.id} has no syntax palette; its code blocks would fall back to the harness's`);
+    continue;
+  }
+  /* The surface the syntax colours actually sit on. CodeBlock.module.css paints
+     `pre.shiki` with this token and marks it !important, so it — not
+     --shiki-background — is the real backdrop. Measuring against anything else
+     would be measuring the wrong thing. */
+  const surface = p.tokens['--dsw-alias-markdown-code-block'];
+  const ratios = [];
+
+  for (const name of SYNTAX_TOKENS) {
+    syntaxAssertions += 1;
+    const value = table[name];
+    if (value === undefined) {
+      failures.push(`#26 ${p.id} ${name} is missing from the syntax palette`);
+      continue;
+    }
+    const ratio = contrast(value, surface);
+    ratios.push(ratio);
+    measured.push({ themeName: p.id, id: 26, fg: name.replace('--shiki-token-', 'syntax '), bg: `code block ${surface}`, ratio, min: AA, ok: ratio >= AA });
+    if (ratio < AA) {
+      failures.push(
+        `#26 ${p.id}: ${name} = ${value} on the code surface ${surface} = ${ratio.toFixed(2)}:1 ` +
+          `(needs ${AA}:1) — code tokens must stay readable, not just the prose`,
+      );
+    }
+  }
+
+  /* #27 — the palette must stay a palette.
+     Deriving each colour to exactly the AA floor is the obvious implementation
+     and the wrong one: it collapses all nine tokens onto one luminance, so a
+     comment becomes as loud as a keyword. tools/derive-shiki.mjs moves every
+     token by ONE shared factor instead, which preserves the harness's designed
+     prominence ordering. This asserts the outcome of that decision, so a later
+     edit cannot quietly flatten it again. */
+  if (ratios.length === SYNTAX_TOKENS.length) {
+    const spread = Math.max(...ratios) - Math.min(...ratios);
+    syntaxSpreads.push(`${p.id.replace('hana-', '')} ${spread.toFixed(2)}`);
+    syntaxAssertions += 1;
+    if (!(spread >= 0.5)) {
+      failures.push(
+        `#27 ${p.id}: syntax contrast spread is only ${spread.toFixed(2)} ` +
+          `(${syntaxSpreads.join(', ')}) — the palette has been flattened onto one luminance`,
+      );
+    }
+  }
+}
+
 /* ── report ─────────────────────────────────────────────────────────────── */
 
 if (process.argv.includes('--verbose')) {
@@ -229,12 +319,18 @@ if (process.argv.includes('--verbose')) {
     );
   }
   console.log(
-    `\nreflective: foreground polarity ${polarity.join(' ')} | link contrast ${linkSpread}`,
+    `\nreflective: foreground polarity ${polarity.join(' ')} | link contrast ${linkSpread}` +
+      `\nsyntax contrast spread: ${syntaxSpreads.join(' | ')}`,
   );
 }
 
 const assertions =
-  PAIRS.length * Object.keys(THEMES).length + polarityAssertions + 2 + 1 + grainAssertions;
+  PAIRS.length * Object.keys(THEMES).length +
+  polarityAssertions +
+  2 +
+  1 +
+  grainAssertions +
+  syntaxAssertions;
 if (failures.length) {
   console.error(`contrast: ${failures.length} FAILED of ${assertions} assertions\n`);
   for (const f of failures) console.error('  ✗ ' + f);
@@ -242,5 +338,6 @@ if (failures.length) {
 }
 console.log(
   `contrast: ${assertions} assertions pass (${PAIRS.length} pairs x ${Object.keys(THEMES).length} palettes ` +
-    `+ ${polarityAssertions} polarity + 2 link band + 1 soft-light neutrality + ${grainAssertions} grain-composite)`,
+    `+ ${polarityAssertions} polarity + 2 link band + 1 soft-light neutrality + ${grainAssertions} grain-composite ` +
+    `+ ${syntaxAssertions} syntax: ${SYNTAX_TOKENS.length} tokens x ${PALETTES.length} palettes + ${PALETTES.length} spread)`,
 );

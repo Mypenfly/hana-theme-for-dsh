@@ -112,6 +112,71 @@ if (skin.tokens && typeof skin.tokens.count === 'number') {
   );
 }
 
+/* 6 — the syntax palette must use exactly the names the harness declares.
+ *
+ * `--shiki-*` is a SECOND channel: not part of the 89 registered colour tokens,
+ * so `theme.register`/`overrideTokens` can never reach it and a misspelling is
+ * a silent no-op in exactly the same way. The list is generated from the
+ * installed bundle's `shiki_css_default` by tools/refresh-allowlist.mjs, so an
+ * upgrade that renames or adds a syntax token shows up as a failing build
+ * rather than as code that quietly keeps the harness's colours.
+ */
+const syntaxAllowed = new Set(allowlist.syntaxTokens || []);
+check(
+  syntaxAllowed.size > 0,
+  'token-allowlist.json has no syntaxTokens — re-run `npm run refresh:allowlist`',
+);
+
+const SHIKI = client.SHIKI || {};
+const shikiIds = Object.keys(SHIKI).sort();
+check(
+  JSON.stringify(shikiIds) === JSON.stringify(PALETTES.map((p) => p.id).sort()),
+  `the syntax palettes cover ${JSON.stringify(shikiIds)} but the plugin registers ` +
+    `${JSON.stringify(PALETTES.map((p) => p.id).sort())} — every palette needs one, or its code ` +
+    'blocks silently fall back to the harness colours',
+);
+
+for (const [id, table] of Object.entries(SHIKI)) {
+  const names = Object.keys(table).sort();
+  const unknown = names.filter((n) => !syntaxAllowed.has(n));
+  check(
+    unknown.length === 0,
+    `${id} uses ${unknown.length} syntax name(s) the harness does not declare — silent no-ops: ${unknown.join(', ')}`,
+  );
+  const missing = [...syntaxAllowed].filter((n) => !names.includes(n)).sort();
+  check(
+    missing.length === 0,
+    `${id} does not cover ${missing.length} syntax name(s) the harness declares: ${missing.join(', ')}`,
+  );
+  /* Every palette must name the SAME set, or one palette would keep the
+     harness's colour for a token the others override — invisible in one mode
+     and wrong in the other. */
+  check(
+    JSON.stringify(names) === JSON.stringify(Object.keys(SHIKI[PALETTES[0].id]).sort()),
+    `${id} does not cover the same syntax names as ${PALETTES[0].id}`,
+  );
+}
+
+/* 7 — the syntax background must equal the code surface it is painted on.
+   CodeBlock.module.css paints `pre.shiki` with --dsw-alias-markdown-code-block
+   and marks it !important, so that token — not --shiki-background — is the real
+   backdrop. The two must agree, or shiki's inline background and the !important
+   rule would disagree and the "surface" would depend on which won. */
+for (const { id, tokens } of PALETTES) {
+  const table = SHIKI[id];
+  if (!table) continue;
+  check(
+    table['--shiki-background'] === tokens['--dsw-alias-markdown-code-block'],
+    `${id}: --shiki-background is ${table['--shiki-background']} but the code surface ` +
+      `--dsw-alias-markdown-code-block is ${tokens['--dsw-alias-markdown-code-block']} — they must agree`,
+  );
+  check(
+    table['--shiki-foreground'] === tokens['--dsw-alias-label-primary'],
+    `${id}: --shiki-foreground is ${table['--shiki-foreground']} but the palette's primary ink is ` +
+      `${tokens['--dsw-alias-label-primary']} — code text must use the palette's ink`,
+  );
+}
+
 if (failures.length) {
   console.error(`tokens: ${failures.length} FAILED\n`);
   for (const f of failures) console.error('  ✗ ' + f);

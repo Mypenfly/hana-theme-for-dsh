@@ -359,6 +359,7 @@ if (detachBody) {
     ['removeAttribute(TEXTURE_ATTR)', 'the paper-texture attribute'],
     ['removeAttribute(SHAPE_ATTR)', 'the radii attribute'],
     ['removeProperty(GRAIN_VAR)', 'the inline grain intensity'],
+    ['clearShiki()', 'the inline syntax palette'],
   ]) {
     check(detachBody.includes(needle), `detach() does not release ${what} (missing \`${needle}\`)`);
   }
@@ -378,6 +379,37 @@ check(
   (source.match(/insertCss\(/g) || []).length === 2,
   'insertCss() should be called from exactly one place (its definition plus mount()); ' +
     `found ${(source.match(/insertCss\(/g) || []).length} occurrences`,
+);
+
+/* 26 — the syntax palette must be applied on the palette path, and released on
+ * the detach path.
+ *
+ * --shiki-* is a second colour channel: it is NOT one of the 89 registered
+ * tokens, so the theme service never writes it and the L1b tables are the only
+ * thing that can. Two ways to lose it, and neither is visible:
+ *
+ *   - never applied  -> the harness keeps its own colours, which follow the
+ *     active colorScheme while hana's code SURFACE follows the chosen palette;
+ *     measured in-engine that mismatch put 4 of 5 exercised token colours below
+ *     AA in three palettes, and 5 of 5 below AA in the window where a dark
+ *     palette is painted before the preference is pinned.
+ *   - never released -> a detached theme leaves eleven inline custom properties
+ *     on <body>, so the next theme's code blocks keep hana's syntax colours.
+ */
+const reconcileBody = functionBody(source, 'function reconcile(');
+check(reconcileBody !== null, 'no reconcile() found; the visual state has no single owner');
+if (reconcileBody !== null) {
+  check(
+    /applyShiki\(/.test(reconcileBody),
+    'reconcile() never calls applyShiki(), so the syntax palette would never be applied and ' +
+      'code blocks would keep colours chosen for a different surface',
+  );
+}
+const applyShikiBody = functionBody(source, 'function applyShiki(');
+check(
+  applyShikiBody !== null && applyShikiBody.includes('clearShiki()'),
+  'applyShiki() has no path that clears the layer for an unknown palette; switching palettes ' +
+    'would leave the previous palette’s syntax colours behind',
 );
 
 /* 13 — the user's font-size preference must never be frozen.

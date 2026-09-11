@@ -22,3 +22,14 @@ assests/
 # Local diagnostic dumps (a one-off view of THIS machine's settings surface,
 # not something a published theme should ship).
 test/settings-probe.json
+
+# Verification scaffolding is source and IS committed; its generated outputs are
+# not. shiki-probe.html embeds a whole palette plus the harness's stylesheets,
+# and probe.png is a screenshot of this machine's fonts — neither belongs in the
+# repo, and both are one command away (see test/verify/build-shiki-probe.mjs).
+test/verify/shiki-probe.html
+test/verify/probe.png
+
+# A throwaway Firefox profile, created in-tree so headless rendering works in a
+# sandbox with no writable HOME.
+.verify-profile/

@@ -6,7 +6,8 @@
     "path": "~/.dsh/profiles/node_modules/@deepseek-ai/dsh-client-ui-theme/lib/client.js",
     "derivedFrom": "design_platform_css_default: body{…} ∪ body[data-ds-dark-theme]{…}, --dsw-alias-* and --dsw-specific-* only",
     "lightCount": 89,
-    "darkCount": 89
+    "darkCount": 89,
+    "syntaxCount": 11
   },
   "versionDependent": {
     "--dsw-alias-link": {
@@ -108,5 +109,18 @@
     "--dsw-specific-sidebar-nav-item-active-accent",
     "--dsw-specific-sidebar-nav-item-hover",
     "--dsw-specific-tip"
+  ],
+  "syntaxTokens": [
+    "--shiki-background",
+    "--shiki-foreground",
+    "--shiki-token-comment",
+    "--shiki-token-constant",
+    "--shiki-token-function",
+    "--shiki-token-keyword",
+    "--shiki-token-link",
+    "--shiki-token-parameter",
+    "--shiki-token-punctuation",
+    "--shiki-token-string",
+    "--shiki-token-string-expression"
   ]
 }

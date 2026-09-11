@@ -64,10 +64,16 @@
       # The checks are the release gate: `nix flake check` runs exactly what
       # `npm test` runs, in a sandbox with no network and a read-only source, so
       # a test that only passes because it wrote something will fail here.
+      #
+      # Every command here is offline by construction. `derive-shiki.mjs --check`
+      # qualifies because the repainted source palette is part of the
+      # reproduction, not read out of an installed harness.
       checkCommands = ''
         node test/check.js
         node test/tokens.test.js
+        node test/surfaces.test.js
         node test/contrast.test.js
+        node tools/derive-shiki.mjs --check
       '';
     in
     {
@@ -131,9 +137,12 @@
               printf '  node %s   pnpm %s\n' "$(node --version)" "$(pnpm --version)"
               cat <<'BANNER'
 
-                npm test                    allow-list + contrast + static checks
+                npm test                    static + allow-list + colour surfaces + contrast
                 npm run allowlist:check     is the committed allow-list still fresh?
                 npm run refresh:allowlist   re-derive the token allow-list from DSH
+                npm run surfaces:check      is the committed colour-surface ledger still fresh?
+                npm run refresh:surfaces    re-scan DSH for colour-carrying custom properties
+                npm run derive:shiki        re-derive the syntax-highlighting palettes
                 npm run probe               print the Phase 0 DOM probe script
 
                 dsh plugin --profile web add "link:$PWD"    install (desktop is app-owned)

@@ -80,7 +80,7 @@ dsh plugin --profile <profile> remove hana-theme-for-dsh
 
 ## 它改什么，以及它拒绝改什么
 
-**改。** 当前配色对应的 89 个 alias/specific 颜色令牌；以及当某套花笺配色生效且「衬线阅读体」打开时，markdown 阅读正文的**字体族**，加上可选开启的修饰层。
+**改。** 当前配色对应的 89 个 alias/specific 颜色令牌；**同一配色下的 11 个语法高亮变量**（代码块里的注释、关键字、字符串等，见下方「代码块的语法高亮」）；以及当某套花笺配色生效且「衬线阅读体」打开时，markdown 阅读正文的**字体族**，加上可选开启的修饰层。
 
 **拒绝。** 其它一切。而这里最重要的行为是一条**否定式**的：**只要没有任何花笺配色被认领，本插件就什么都不贡献** —— 不注入样式表、不设 body 属性、不加令牌层。装上它既不可能重绘内置主题，也不可能把自己的排版漏进别的皮肤。
 
@@ -88,6 +88,36 @@ dsh plugin --profile <profile> remove hana-theme-for-dsh
 
 - **界面本体保持无衬线。** 把 `--dsw-font-family` 改成衬线栈是举手之劳，但那会把按钮、侧栏、每一个标签一起改掉。只有阅读正文变成书，界面保留自己的声音。
 - **你的字号偏好继续生效。** 主题覆写的是 DSH 的 markdown **font shorthand**，并逐字保留 harness 自己的字号与行高表达式，所以 `--dsh-content-font-size` 是透传的，不会被冻结。
+
+## 代码块的语法高亮
+
+这是本主题**第二个颜色通道**，也是一处曾经真实漏掉的地方。
+
+DSH 用 shiki 的 `css-variables` 主题着色代码，官方注释写得很清楚：*"All token colors resolve through `--shiki-*` custom properties"*。跑一遍 harness 自己的高亮器就能看到：每个彩色 span 都是 `style="color:var(--shiki-token-X)"`，39 个行内 style、7 个变量、**零个字面色值**。
+
+问题出在两个**互相独立**的选择上：
+
+| | 由什么决定 |
+|---|---|
+| 代码块的**底色** | 本主题选的配色（`--dsw-alias-markdown-code-block`） |
+| 代码块的**语法色** | harness 按**当前 colorScheme** 切换（`:root` 一套、`body[data-ds-dark-theme]` 一套）|
+
+两者从来没有被放在一起检查过。**在真实引擎里实测**（`test/verify/build-shiki-probe.mjs`）：四套配色里有三套，抽样用到的 5 个语法色有 4 个不达 AA，最差 **2.88:1** —— 而当时那套 91 条断言全绿。
+
+还有一处更尖锐的：`body[data-ds-dark-theme]` 取自**当前活动主题**的 colorScheme，而配色是走 override 层上来的，两者之间有一个窗口——override 层已经铺上暗色纸面，偏好却还没被钉住。**在这个窗口里，亮色语法色落在暗色代码底上**，实测 5 个全不达标，最差 **1.13:1**，也就是看不见。
+
+修法是把这 11 个变量**按配色**行内写在 `body` 上（和字号补偿、纹理强度同一套路），于是语法色跟随**用户选的那套配色**，而不是跟随 colorScheme——那个窗口从此不可能渲染错。
+
+数值由 `tools/derive-shiki.mjs` 推导，不是手挑的：色相与饱和度保留 harness 自己的（token 角色要能认出来），**一个共享系数**把整组朝各自纸面需要的方向等比推。共享系数是「调色板还是调色板」的关键——**逐个推到刚好 4.5:1 是被试过并否掉的**，那会把九个 token 压到同一个明度上，注释和关键字一样响。变换是渐近的，所以永远不会被裁到纯黑/纯白而悄悄丢掉色相。36 对现在全部达标，最差 4.50:1；实测确认「钉住」与「未钉住」两种状态渲染完全一致。
+
+| 配色 | 代码底色 | 语法色对比度区间 |
+|---|---|---|
+| 纸本 | `#F5F1E8` | 4.51 – 9.46 |
+| 青夜 | `#4A5A65` | 4.50 – 5.81 |
+| 珊瑚 | `#F7EFE6` | 4.53 – 9.48 |
+| 斑斓 | `#2E3F49` | 4.50 – 7.43 |
+
+青夜的区间偏窄，是它**代码底本身偏亮**（`#4A5A65`，一块中等明度的石板）的必然代价：中等明度会把任何前景色板压扁。想拿回区分度，正解是把它的代码底压暗（例如 `#2A3A44`，与页面底 `#3B4A54` 的分离度相同但方向相反），代价是代码块从「浮起的浅色卡片」变成「下沉的暗色凹槽」——**那是一次观感改动，所以留给你决定**，没有替你做。
 
 ## 设置项
 
@@ -144,6 +174,10 @@ DSH 的字号设置只管会话内容；界面文字**根本没有设置项**。
 - **`--dsw-alias-toast-bg` 是死令牌。** Toast 的表面是 `--dsw-alias-button-contrast-fill` 配 `--dsw-alias-label-primary-inverted`。
 - **raw HTML 永远不进入 DOM。** DSH 把 react-markdown 换成了自研的 mdast→React 渲染器，其策略是"raw HTML 只作为字面文本输出"。所以 GitHub 风格的 `[!NOTE]` Callout **永远无法被样式化** —— 见下方「没做的部分」。
 - **markdown 根类名是构建哈希**（`_markdown_177e0_5`）。所以 markdown 规则锚在 `[data-chat-flow-kind='assistant-step']` 上，而且是**对着实时页面实测确认**的，不是假设的。
+- **代码块的语法色是第二个颜色通道，而且它是行内的。** shiki 把颜色写成 `style="color:var(--shiki-token-X)"`，所以**任何样式表规则都够不到它们**——行内样式压过选择器。唯一能改语法色的办法是改那些自定义属性的**值**。而 harness 把它们声明在 `:root`（亮）与 `body[data-ds-dark-theme]`（暗）上，也就是跟着 **colorScheme** 走，而代码块**底色**跟着**配色**走。两个独立的选择，从来没人把它们放在一起检查过。
+- **`--shiki-foreground` 挂在 `:root` 上是坏的。** 它的值是 `var(--dsw-alias-label-primary)`，而那个别名只写在 `body` 上；自定义属性的 `var()` 在**声明它的那个元素**上求值，所以它在 `:root` 上算不出来，整条声明作废——最后靠 `color` 继承回退才碰巧能看。本主题把它行内写在 `body` 上，正好绕过这个坑。
+- **`--dsw-static-*` 原始色阶不是「表面」，是一层地基。** 重绘它能清掉品牌残色，但那会一次性改掉所有消费者，包括本主题从未测量过的——所以本主题走 alias 层，并把这 73 个名字在台账里逐个记为 `harness`。
+- **`--dsh-state-ongoing` 够不到。** 它被钉在 `--dsw-static-deepseek-450` 上、声明在组件类 `.dot, .matrix`，body 级规则压不过、类名又是构建哈希。如实记为已知残留，不假装覆盖。
 
 ## 开发
 
@@ -151,9 +185,12 @@ DSH 的字号设置只管会话内容；界面文字**根本没有设置项**。
 
 ```bash
 nix develop                  # Node 24 + pnpm + jq，锁定到宿主系统的 nixpkgs
-npm test                     # 白名单 + 对比度 + 静态判据
+npm test                     # 静态判据 + 白名单 + 颜色表面台账 + 对比度
 npm run refresh:allowlist    # 从已安装的 DSH 重新推导令牌白名单
 npm run allowlist:all        # 列出本机全部 DSH 安装及各自令牌数
+npm run refresh:surfaces     # 重新扫描 DSH 的全部「承载颜色」的自定义属性
+npm run surfaces:list        # 逐条打印台账，看每个表面归谁管
+npm run derive:shiki         # 重新推导四套配色的语法高亮色板
 npm run probe                # 打印 Phase 0 DOM 探针，供 DevTools 控制台使用
 ```
 
@@ -161,31 +198,58 @@ npm run probe                # 打印 Phase 0 DOM 探针，供 DevTools 控制�
 
 ```
 lib/index.js     Host 半边 —— 持久设置命名空间
-lib/client.js    Client 半边 —— 配色、样式表、设置页（交付物）
+lib/client.js    Client 半边 —— 配色、语法色板、样式表、设置页（交付物）
 test/            各种门禁
-tools/           refresh-allowlist.mjs，生成 test/token-allowlist.json
+test/verify/     真机验证脚手架（不是门禁，见下）
+tools/           refresh-allowlist.mjs / scan-color-surfaces.mjs / derive-shiki.mjs
 docs/            本实现所依据的调研与设计文档
 ```
+
+**`test/verify/` 是实测脚手架，不是判据。** 对比度断言算的是表里的数字；这里的脚本回答的是另一个问题——**浏览器实际渲染成了什么**。`shiki-mechanism.mjs` 用 harness 自己的高亮器打印真实 markup，`build-shiki-probe.mjs` 拼出一个只含真实交付物的页面（真的 CSS、真的令牌、真的 shiki 输出、真的 `CodeBlock.module.css`），用无头浏览器渲染后**在页面里打印引擎读到的计算样式**，一张截图就把实测数字带回来。代码块那处缺陷就是它抓出来的，而 91 条断言当时全绿。
 
 ## 测试才是重点
 
 主题是**静默失败**的。拼错的令牌不会被抱怨、也无人读取；一个多余字符会让浏览器丢掉一条规则然后继续跑；样式表里的颜色看起来完全正确，直到用户装了另一个写令牌的插件。所以这里的检查不是仪式。
 
-**`test/contrast.test.js` —— 91 条断言。** 19 对 × 4 套配色、按模式的前景极性、链接可读性区间，以及纸纹的合成模型。数值**从交付的令牌表里直接读取**，绝不用第二份副本。加 `--verbose` 会打印每一对实测值。
+**`test/contrast.test.js` —— 131 条断言。** 19 对 × 4 套配色、按模式的前景极性、链接可读性区间、纸纹的合成模型，以及**代码块语法色 9 × 4 + 4 条「色板没有被压平」**。数值**从交付的令牌表里直接读取**，绝不用第二份副本。加 `--verbose` 会打印每一对实测值。
 
-**`test/check.js` —— 78 条静态判据。** 禁止哈希选择器、禁止在 `:root` 上声明、禁止在样式表里声明已注册的颜色令牌、禁止无人读取的 `--hana-*` 令牌、禁止用裸字符串调 `settingsScope.bind()`、禁止在 `theme/change` 监听器里同步 `setTheme()`、override 层必须幂等、每一个运行时路径都必须在 `files` 里、以及一条 `ctx.effect` 释放链覆盖每一个副作用。
+**`test/check.js` —— 82 条静态判据。** 禁止哈希选择器、禁止在 `:root` 上声明、禁止在样式表里声明已注册的颜色令牌、禁止无人读取的 `--hana-*` 令牌、禁止用裸字符串调 `settingsScope.bind()`、禁止在 `theme/change` 监听器里同步 `setTheme()`、override 层必须幂等、语法色板必须在配色路径上应用且在 detach 路径上释放、每一个运行时路径都必须在 `files` 里、以及一条 `ctx.effect` 释放链覆盖每一个副作用。新增的判据都做过**变异测试**——把 `applyShiki()` 或 `clearShiki()` 删掉，构建必须失败。
 
-**`test/tokens.test.js`** —— 每个颜色令牌名都必须出现在由已安装 harness 生成的白名单里，且四套配色必须覆盖**同一组**名字。
+**`test/surfaces.test.js` —— 颜色表面台账，195 条。** 这是这套测试里唯一一条**关于测试本身**的判据，也是那个缺陷留下的真正教训。
 
-这套测试是有战功的。它抓到过：一次加载期崩溃、本主题自己配色里的三个死令牌、一个死掉的 `--hana-*` 令牌、一个**只有从 registry 安装才会踩到**的打包缺口；以及在设置持久化那个 bug 之后，它现在会**拒绝构建**用裸字符串绑定设置作用域的代码。
+原来那 19 对断言是**手工挑的**。手工挑的清单只能覆盖有人想到的表面，于是**没人想到的表面无论套件多绿都不会被测量**。代码块语法色就是证明：它从来不在清单上，而这套主题恰恰就是决定代码块底色的人。
+
+所以修法不是「把漏掉的对子补上」，而是**从工件里枚举**：`tools/scan-color-surfaces.mjs` 扫描已安装 harness 里每一个「承载颜色」的自定义属性（字面色值，**或者**引用颜色令牌的 `var()`——`--shiki-foreground` 就是后者，只找字面值会漏掉代码块的墨色），要求每一个都有一条**记录在案的处置**：
+
+| 分类 | 数量 | 含义 |
+|---|---|---|
+| `theme` | 103 | 本主题必须提供，且确实提供了 |
+| `derived` | 4 | harness 声明成对某个本主题拥有的令牌的引用，自动跟随 |
+| `harness` | 82 | 归 harness，本主题**不得**写（自带明暗两套，或者不钉构建哈希就够不到）|
+| `boot` | 6 | 启动屏，插件挂载之前就画完了 |
+
+台账里出现 `UNCLASSIFIED` 就构建失败，所以 **DSH 升级引入一个新颜色表面时，决定是「被做出的」，而不是「被漏掉的」**。它当场就抓到 5 个此前无人看见的表面，其中一个值得点名：`--dsh-state-ongoing`（进行中状态点）被钉在原始色阶 `--dsw-static-deepseek-450` 上，harness 自己的注释都写了「Ongoing blue has no alias token」。它声明在组件类 `.dot, .matrix` 上，body 级规则压不过它，而那个类名是每构建一变的 CSS Module 名——**想够到它就等于钉一个构建哈希，而判据 5 和 16 明令禁止**。于是它被如实记为一条**已知的、刻意的残留**：每一套配色下，进行中状态都是一颗品牌蓝的点。
+
+台账的另一个方向同样重要：**声称 `theme` 的表面必须真的被提供**，否则台账会漂成虚构——那比没有台账更糟，因为它让缺口看起来是关着的。
+
+**`test/tokens.test.js`** —— 每个颜色令牌名都必须出现在由已安装 harness 生成的白名单里；四套配色必须覆盖**同一组**名字；语法色板的 11 个名字必须与 harness 声明的**完全一致**（同样由 `refresh-allowlist.mjs` 从已安装工件里生成）；`--shiki-background` 必须等于它在上面作画的 `--dsw-alias-markdown-code-block`。
+
+这套测试是有战功的。它抓到过：一次加载期崩溃、本主题自己配色里的三个死令牌、一个死掉的 `--hana-*` 令牌、一个**只有从 registry 安装才会踩到**的打包缺口；在设置持久化那个 bug 之后，它会**拒绝构建**用裸字符串绑定设置作用域的代码；以及**整个代码块语法高亮通道**。
 
 ## 兼容性
 
-已针对 **DeepSeek Harness Desktop 2.0.5 / 2.0.6** 与 **`@deepseek-ai/dsh-client-ui-theme` 0.1.2-rc.1**（89 个颜色令牌）验证。`package.json` 声明测试过的区间为 `0.1.2-rc.1 – 0.1.5-alpha.1`；后者只多一个令牌（`--dsw-alias-link`），本主题不使用它，白名单把它记为 `versionDependent`。
+已针对 **DeepSeek Harness Desktop 2.0.5 / 2.0.6** 与 **`@deepseek-ai/dsh-client-ui-theme` 0.1.2-rc.1**（89 个颜色令牌 + 11 个语法变量）验证。`package.json` 声明测试过的区间为 `0.1.2-rc.1 – 0.1.5-alpha.1`；后者只多一个令牌（`--dsw-alias-link`），本主题不使用它，白名单把它记为 `versionDependent`。
 
-依赖的稳定锚点：89 个已注册令牌名、`--dsw-font-markdown-*`、`--dsh-content-font-size`、`body[data-ds-dark-theme]`、`md-code-block`、`md-table-wide`、`data-chat-flow-kind`、`data-composer-card`、`settings.section`。
+依赖的稳定锚点：89 个已注册令牌名、11 个 `--shiki-*` 名、`--dsw-font-markdown-*`、`--dsh-content-font-size`、`body[data-ds-dark-theme]`、`md-code-block`、`md-table-wide`、`data-chat-flow-kind`、`data-composer-card`、`settings.section`。
 
-harness 升级后请跑 `npm run refresh:allowlist` 并**读那份 diff**。**消失的令牌，就是一个静默失效的覆写。**
+harness 升级后请跑这两条，并**读那份 diff**：
+
+```bash
+npm run refresh:allowlist     # 令牌名；消失的令牌 = 一个静默失效的覆写
+npm run refresh:surfaces      # 颜色表面；新出现的表面会以 UNCLASSIFIED 让构建失败
+```
+
+第二条是本仓库在代码块那处缺陷之后新增的：**一个新的颜色表面不会再无声无息地溜过去**，它会带着「请做决定」的要求出现在台账里。
 
 ## 没做的部分，以及为什么
 
@@ -193,6 +257,9 @@ harness 升级后请跑 `npm run refresh:allowlist` 并**读那份 diff**。**�
 - **动效。** 刻意不做。八个关键帧本身微不足道；风险在于**流式输出期间入场动画会被反复重放** —— 而这恰恰是动效 bug 的聚集地，也恰恰是不盯着一次长生成就看不见的地方。
 - **晴天模式**（HanaAgent 的 2.38 MB 视频叠层）。技术上可行，但会为一个可选效果破坏本插件**零二进制资源**的性质。
 - **打包字体。** HanaAgent 带了 6.5 MB，其中 6.0 MB 是中文。系统衬线栈免费拿到了大部分效果。
+- **青夜的代码底色没有压暗。** 见「代码块的语法高亮」末尾：压暗它能拿回语法色的区分度，但那是一次观感改动，留给你决定。
+- **`--dsh-state-ongoing` 仍是品牌蓝。** 够不到（见上方坑列表），如实记录在台账里，没有假装覆盖。
+- **界面字号。** 无令牌通道（实测 64 处硬编码 px），改用应用自带的 Electron 缩放，刻意不做 CSS `zoom` 的复制品。
 
 ## 许可证
 
