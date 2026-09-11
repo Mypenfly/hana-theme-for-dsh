@@ -585,6 +585,60 @@ for (const rel of RUNTIME_PATHS) {
   check(fs.existsSync(path.join(ROOT, rel)), `package.json points at "${rel}", which does not exist`);
 }
 
+/* ── the process wash ─────────────────────────────────────────────────────
+ *
+ * HanaAgent's chat paints its whole process region with ONE translucent tint
+ * (`--tool-bg: rgba(26,48,73,0.03)` in coral, black at 3% in paper, white at 3%
+ * in midnight) and leaves the items inside unboxed. An earlier revision of this
+ * theme did the opposite: it gave every [data-turn-process-member] a fill, a
+ * 1px border, a 6px radius and a shadow, which turned each tool call into its
+ * own card and made a one-line summary the loudest object on the page. That is
+ * the defect the theme's user reported, so it is asserted here rather than left
+ * to a comment.
+ *
+ * The wash must be DERIVED from a token, not a hex: `color-mix` of the
+ * palette's own ink at a low percentage reproduces HanaAgent's --tool-bg in all
+ * four ports, because the ink is near-black in paper, near-white in the two
+ * midnight palettes and rgb(26,48,73) in coral — the same light/dark split
+ * HanaAgent writes out by hand. A literal here would be a second, unmanaged
+ * copy of a colour, which is the thing this project exists to prevent.
+ */
+const washDecl = /--hana-wash:\s*color-mix\(in srgb,\s*var\(--dsw-alias-label-primary\)\s*(\d+(?:\.\d+)?)%,\s*transparent\)/;
+const washMatch = css.match(washDecl);
+check(
+  washMatch !== null,
+  'CSS does not define --hana-wash as color-mix(in srgb, var(--dsw-alias-label-primary) N%, transparent). ' +
+    'The process wash must be derived from the palette ink: a literal is a second copy of a colour, and a ' +
+    'wash of some other token stops matching HanaAgent’s --tool-bg.',
+);
+if (washMatch) {
+  check(
+    Number(washMatch[1]) <= 5,
+    `--hana-wash mixes ${washMatch[1]}% of the ink; HanaAgent's --tool-bg is 3% and anything past 5% stops ` +
+      'being a tint and becomes a panel again',
+  );
+}
+for (const [hook, why] of [
+  ['[data-turn-process-member]', 'the flow items inside the process window'],
+  ['[data-turn-process-tool-calls]', 'the collapsed one-line summary'],
+]) {
+  const rule = css.match(new RegExp('body\\[data-hana-theme\\] ' + hook.replace(/[[\]]/g, '\\$&') + '\\s*\\{([^}]*)\\}'));
+  check(rule !== null, `CSS has no rule for ${hook} (${why})`);
+  if (!rule) continue;
+  check(
+    /background:\s*var\(--hana-wash\)/.test(rule[1]),
+    `${hook} (${why}) does not paint var(--hana-wash)`,
+  );
+  for (const banned of ['border:', 'border-radius:', 'box-shadow:']) {
+    check(
+      !rule[1].includes(banned),
+      `${hook} (${why}) declares "${banned}", which boxes each item into its own card. HanaAgent paints one ` +
+        'wash behind the whole region and leaves the items inside unboxed; the harness already supplies the ' +
+        'collapsed row’s own .5px separator.',
+    );
+  }
+}
+
 /* ── report ─────────────────────────────────────────────────────────────── */
 
 if (failures.length) {

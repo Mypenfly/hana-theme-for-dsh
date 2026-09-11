@@ -26,11 +26,11 @@
  *
  * WHAT THIS ENFORCES
  * ------------------
- *   1. GROUND   every surface classified `plane` reads at least PLANE_FLOOR away
- *               from bg-base. The floor comes from the artifact: 纸本's
- *               layer-1/layer-2 already sit at 1.065-1.070 and DO read as
- *               surfaces, so the line is "at least as separated as the ones that
- *               work", not an invented number.
+ *   1. NEIGHBOURS every surface classified `plane` reads at least
+ *               SEPARATION_FLOOR away from bg-base. There is deliberately no
+ *               separate, larger GROUND floor: an earlier revision had one, and
+ *               it is what flattened 珊瑚's card. See the note above
+ *               SEPARATION_FLOOR.
  *   2. SEPARATION surfaces that share a screen differ from each other: nesting
  *               (a code block in a bubble) and co-occurrence (an assistant
  *               bubble beside a tool card). Deliberate ties between surfaces
@@ -58,13 +58,19 @@ const { contrast, parse, composite } = require_(join(ROOT, 'test', 'color.js'))
 
 const ROLE_LEDGER = require_(join(ROOT, 'test', 'surface-roles.json'))
 
-/* The floor, held exactly. There is no safety margin to add: a shipped hex has a
-   deterministic contrast, so a value at 1.0601 is at 1.0601 on every machine and
-   the offline gate measures the same number. An earlier version applied a 1%
-   margin and it moved 纸本's raised card — which already passed at 1.070 — down
-   into the recessed direction, destroying the one surface whose whole job is to
-   sit ABOVE the paper. A margin that is not needed and does real damage. */
-const PLANE_FLOOR = ROLE_LEDGER.planeFloor || 1.06
+/* THERE IS NO "EVERY PLANE CLEARS THE GROUND BY X" RULE HERE, and the reason is
+   that HanaAgent's own themes say otherwise. An earlier revision read 纸本's
+   working surfaces (1.065-1.070) as a floor and then imposed them on every
+   palette as a TARGET. That generalisation was invented, and it did real
+   damage: 珊瑚's card is authored at #FFFBF3, a 1.033 step from its ground,
+   because the design tells a card apart with a hairline and a shadow rather than
+   with lightness. Forcing 1.060 pushed it to #FFFEFA -- where sRGB clipping
+   stripped its warmth -- and then, when the raised side ran out of headroom,
+   pulled it back DOWN to a neutral #EFEEEB while keeping the dead chroma it had
+   picked up on the way. Its four mirrors, its menu and its input followed it.
+   A plane must be tellable from its neighbours and from the page; it does not
+   have to be far from them. The ground is therefore just another neighbour, in
+   SEPARATION below, at the one floor this tool has. */
 /* A nested or adjacent surface may be subtler than one on the ground — it is
    read against a container the eye has already separated — but it must be read
    at all. */
@@ -106,6 +112,14 @@ const PLANES = ROLE_LEDGER.entries.filter((e) => e.role === 'plane').map((e) => 
 const MIRRORS = ROLE_LEDGER.entries.filter((e) => e.role === 'mirror')
   .map((e) => [e.name, '--dsw-alias-' + e.mirrorOf, e.mirrorOf])
 const GROUND = '--dsw-alias-bg-base'
+
+/* The page is a neighbour too. A plane that cannot be told from the ground is
+   not a plane, but it only has to clear SEPARATION_FLOOR — not a floor of its
+   own. The ground stays put, so each of these moves the PLANE when they
+   collide. */
+for (const name of PLANES) {
+  SEPARATION.push([GROUND, name, 'beside', 'a plane and the page are on screen together'])
+}
 
 /* ── colour maths ───────────────────────────────────────────────────────── */
 
@@ -266,14 +280,8 @@ for (const palette of PALETTES) {
   for (let pass = 0; pass < 40; pass += 1) {
     let moved = false
 
-    /* 1 — every plane clears the ground */
-    for (const name of PLANES) {
-      if (want[name] === undefined) continue
-      const next = solveOnSide(want[name], ground, PLANE_FLOOR, name)
-      if (next !== want[name]) { want[name] = next; moved = true }
-    }
-
-    /* 2 — surfaces that share a screen differ from each other */
+    /* Surfaces that share a screen differ from each other — the ground included,
+       through the pairs appended above. */
     for (const [outer, inner] of SEPARATION) {
       if (want[outer] === undefined || want[inner] === undefined) continue
       const next = solveOnSide(want[inner], want[outer], SEPARATION_FLOOR, inner)
@@ -299,12 +307,6 @@ for (const palette of PALETTES) {
     want[mirror] = want[source]
   }
 
-  for (const name of PLANES) {
-    if (want[name] === undefined) continue
-    if (contrast(want[name], ground) < PLANE_FLOOR) {
-      unmet.push(`${palette.id} ${name} = ${want[name]} is ${contrast(want[name], ground).toFixed(3)}:1 from the ground, floor ${PLANE_FLOOR}`)
-    }
-  }
   for (const [outer, inner] of SEPARATION) {
     if (want[outer] === undefined || want[inner] === undefined) continue
     if (contrast(want[inner], want[outer]) < SEPARATION_FLOOR) {
@@ -323,7 +325,7 @@ const short = (n) => n.replace('--dsw-alias-', 'a:').replace('--dsw-specific-', 
 const QUIET = process.argv.includes('--json')
 const say = (...a) => { if (!QUIET) console.log(...a) }
 say('SURFACE LADDER DERIVATION')
-say(`ground floor ${PLANE_FLOOR}, separation floor ${SEPARATION_FLOOR}`)
+say(`separation floor ${SEPARATION_FLOOR} (the ground is one of the neighbours)`)
 say('only values that violate a rule move; hue and chroma are held\n')
 
 for (const r of results) {

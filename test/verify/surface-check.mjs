@@ -213,6 +213,17 @@ const VARIANTS = hana.PALETTES.map((p) => ({ id: p.id, doc: doc(p) }));
 /* ── what the engine should resolve, from the shipped tables ────────────── */
 export function expectedSurfaces() {
   const out = {};
+  /* The process wash is color-mix(in srgb, label-primary 3%, transparent), so
+     the browser reports it as `color(srgb R G B / 0.03)` with each channel as a
+     0-1 fraction rounded to six places and stripped of trailing zeros. Derived
+     here from the shipped table rather than written down, for the usual reason:
+     a literal is a second copy of a colour. */
+  const frac = (v) => String(Math.round((v / 255) * 1e6) / 1e6);
+  const wash = (ink) => {
+    const h = ink.replace('#', '');
+    const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
+    return `color(srgb ${frac((n >> 16) & 255)} ${frac((n >> 8) & 255)} ${frac(n & 255)} / 0.03)`;
+  };
   for (const p of hana.PALETTES) {
     const t = p.tokens;
     out[p.id] = {
@@ -220,6 +231,8 @@ export function expectedSurfaces() {
       card: t['--dsw-alias-bg-layer-1'],
       artifact: t['--dsw-alias-bg-layer-3'],
       accent: t['--dsw-alias-state-business-primary'],
+      wash: wash(t['--dsw-alias-label-primary']),
+      ink: t['--dsw-alias-label-primary'],
     };
   }
   return out;
@@ -393,24 +406,50 @@ const rgb = (hex) => {
 const failures = [];
 const near = (a, b) => Math.abs(a - b) <= 0.75;
 
+/* Compare colours by VALUE, not by string. A color-mix of the same ink is
+   serialised by the engine as color(srgb R G B / A) with each channel rounded in
+   its own way (240/255 comes back as 0.941177, not 0.941176), so a string
+   comparison tests the engine's formatter rather than the theme's arithmetic. */
+const parseColour = (s) => {
+  if (typeof s !== 'string') return null;
+  let m = s.match(/^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)$/);
+  if (m) return [Number(m[1]) * 255, Number(m[2]) * 255, Number(m[3]) * 255, m[4] === undefined ? 1 : Number(m[4])];
+  m = s.match(/^rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)$/);
+  if (m) return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])];
+  return null;
+};
+const sameColour = (a, b) => {
+  const x = parseColour(a);
+  const y = parseColour(b);
+  if (!x || !y) return a === b;
+  return x.every((v, i) => Math.abs(v - y[i]) <= (i === 3 ? 0.004 : 0.75));
+};
+
 for (const [id, got] of Object.entries(collected)) {
   const want = expected[id];
   if (!want) { failures.push(`${id}: unexpected variant`); continue; }
 
-  /* 1 — the rules applied at all. */
-  if (!got.card || got.card.bg !== rgb(want.card)) {
+  /* 1 — the rules applied at all. The process region is a WASH, not a card:
+     HanaAgent paints one 3% tint of the palette's own ink behind the whole
+     region and leaves the items inside unboxed, and the computed value is the
+     check that color-mix actually resolved rather than being dropped as invalid
+     (in which case the property would fall back to transparent). */
+  if (!got.card || !sameColour(got.card.bg, want.wash)) {
     failures.push(
-      `${id}: the tool-call card resolved to ${got.card ? got.card.bg : 'nothing'}, expected ` +
-        `${rgb(want.card)} — the rule lost the specificity fight, or never matched`,
+      `${id}: the process wash resolved to ${got.card ? got.card.bg : 'nothing'}, expected ` +
+        `${want.wash} — color-mix either did not resolve or the rule never matched`,
     );
   }
-  if (!got.card || got.card.borderLeftWidth === '0px') {
-    failures.push(`${id}: the tool-call card has no border — it is not a card`);
+  if (got.card && got.card.borderLeftWidth !== '0px') {
+    failures.push(
+      `${id}: a process flow item has a ${got.card.borderLeftWidth} border — boxing each item is what ` +
+        'turned every tool call into its own card',
+    );
   }
-  if (!got.card || got.card.boxShadow === 'none') {
-    failures.push(`${id}: the tool-call card has no shadow`);
+  if (got.card && got.card.boxShadow !== 'none') {
+    failures.push(`${id}: a process flow item casts a shadow — the region is a wash, not a stack of cards`);
   }
-  if (!got.artifact || got.artifact.bg !== rgb(want.artifact)) {
+  if (!got.artifact || !sameColour(got.artifact.bg, rgb(want.artifact))) {
     failures.push(
       `${id}: the artifact row resolved to ${got.artifact ? got.artifact.bg : 'nothing'}, expected ${rgb(want.artifact)}`,
     );
@@ -420,16 +459,19 @@ for (const [id, got] of Object.entries(collected)) {
   }
   /* The COLLAPSED presentation, which the first pass missed entirely. A tool
      call has two forms and only one of them was styled; the one left behind was
-     the one on screen most of the time. */
-  if (!got.bar || got.bar.bg !== rgb(want.card)) {
+     the one on screen most of the time. HanaAgent's fold summary takes the SAME
+     wash as the region it opens, with no outline of its own. */
+  if (!got.bar || !sameColour(got.bar.bg, want.wash)) {
     failures.push(
       `${id}: the collapsed tool-call summary resolved to ${got.bar ? got.bar.bg : 'nothing'}, ` +
-        `expected ${rgb(want.card)} — unpainted it is a full-width transparent row with a rule ` +
-        'under it, which reads as a separator rather than as a control',
+        `expected the same wash as the region it opens, ${want.wash}`,
     );
   }
-  if (!got.bar || got.bar.borderLeftWidth === '0px') {
-    failures.push(`${id}: the collapsed tool-call summary has no border`);
+  if (got.bar && got.bar.borderLeftWidth !== '0px') {
+    failures.push(
+      `${id}: the collapsed tool-call summary has a ${got.bar.borderLeftWidth} border of its own, which is ` +
+        'how it became the loudest object on the page',
+    );
   }
   if (got.edges.bar !== null && got.edges.prose !== null && !near(got.edges.bar, got.edges.prose)) {
     failures.push(
@@ -491,7 +533,7 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(
-  `surface-check: ${Object.keys(collected).length} palette(s) — card, artifact, tail, nested card, ` +
+  `surface-check: ${Object.keys(collected).length} palette(s) — process wash, artifact, tail, nested tool, ` +
     'selected row, active nav row all resolve as the shipped tables declare, and the card keeps ' +
     'the reading column aligned',
 );

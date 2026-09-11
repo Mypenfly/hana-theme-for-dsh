@@ -238,7 +238,7 @@ const MUTATIONS = [
     id: 'surface-ladder-flattened',
     why: 'restores 纸本\'s shipped inline-code chip, which sat 1.003:1 against the ground — not "subtle", absent. A whole class of surface was invisible and nothing measured it',
     suite: 'ramp',
-    marker: 'below the 1.06 floor',
+    marker: 'below the 1.02 floor',
     find: '      "--dsw-alias-markdown-inline-code": "#E9E7DE",\n',
     replace: '      "--dsw-alias-markdown-inline-code": "#F3EFE6",\n',
   },
@@ -250,6 +250,51 @@ const MUTATIONS = [
     find: '      "--dsw-alias-bg-overlay": "#FDF8EF",\n',
     replace: '      "--dsw-alias-bg-overlay": "#F7F2E8",\n',
   },
+  /* The next two are not hypotheticals: both restore a state this theme actually
+     shipped, and both were invisible until the palette was read against
+     HanaAgent's own theme files. */
+  {
+    id: 'plane-tint-drained',
+    why: 'restores 珊瑚\'s shipped card, #EFEEEB — a surface that cleared every contrast floor it was held to (1.081 from the ground) while being a NEUTRAL GREY on a warm cream page. Contrast says nothing about colour, so nothing caught it; it is what made the composer, the menu and 新会话 read as panels from a different theme',
+    suite: 'ramp',
+    marker: 'grey panel on a',
+    find: '      "--dsw-alias-bg-layer-1": "#FFFBF3",\n',
+    replace: '      "--dsw-alias-bg-layer-1": "#EFEEEB",\n',
+  },
+  {
+    id: 'inverted-label-not-inverted',
+    why: 'restores 珊瑚\'s label-primary-inverted, which shipped EQUAL to label-primary. The official wordmark draws its HARNESS badge as a currentColor plate with these glyphs on it, so the word rendered as a solid ink-blue block — the exact defect the theme\'s user reported',
+    suite: 'ramp',
+    marker: 'is only 1.00:1',
+    find: '      "--dsw-alias-label-primary-inverted": "#FDF6EC",\n',
+    replace: '      "--dsw-alias-label-primary-inverted": "#1A3049",\n',
+  },
+  {
+    id: 'process-members-boxed-again',
+    why: 'puts the process flow items back into their own cards — fill, border, radius — which is the exact shape the theme shipped and the theme\'s user reported. HanaAgent paints one wash behind the whole region; boxing each item makes every tool call a card and every one-line summary the loudest object on the page',
+    suite: 'check',
+    marker: 'does not paint var(--hana-wash)',
+    find:
+      '      "  --hana-wash-pad: 10px;",\n' +
+      '      "  margin-inline: calc(-1 * var(--hana-wash-pad));",\n' +
+      '      "  padding-inline: var(--hana-wash-pad);",\n' +
+      '      "  background: var(--hana-wash);",\n',
+    replace:
+      '      "  --hana-wash-pad: 10px;",\n' +
+      '      "  margin-inline: calc(-1 * var(--hana-wash-pad));",\n' +
+      '      "  padding-inline: var(--hana-wash-pad);",\n' +
+      '      "  background: var(--dsw-alias-bg-layer-1);",\n' +
+      '      "  border: 1px solid var(--dsw-alias-border-l1);",\n' +
+      '      "  border-radius: 6px;",\n',
+  },
+  {
+    id: 'wash-transcribed-as-a-literal',
+    why: 'replaces the derived color-mix with the coral hex it happens to resolve to. The wash would still look right in 珊瑚 and be wrong in the other three palettes, and the value would have become a second, unmanaged copy of a colour — the drift this project refuses',
+    suite: 'check',
+    marker: 'does not define --hana-wash',
+    find: 'color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent)',
+    replace: 'rgba(26,48,73,0.03)',
+  },
 ];
 
 const verbose = process.argv.includes('--verbose');
@@ -257,6 +302,7 @@ const SUITES = {
   runtime: path.join(__dirname, 'runtime.test.js'),
   tokens: path.join(__dirname, 'tokens.test.js'),
   ramp: path.join(__dirname, 'contrast.test.js'),
+  check: path.join(__dirname, 'check.js'),
 };
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'hana-selftest-'));
 

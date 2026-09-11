@@ -50,9 +50,13 @@ const redact = (p) => (HOME && p.startsWith(HOME) ? '~' + p.slice(HOME.length) :
  * Every surface the installed UI paints, classified ONCE, by hand.
  *
  *   ground    the page itself: the reference every other figure is measured to
- *   plane     must read as a separate plane from the ground. Asserted at
- *             PLANE_FLOOR contrast or better, in every palette. THIS IS THE
- *             CATEGORY THE REVIEW TURNED ON.
+ *   plane     must read as a separate plane from the ground, and must still be
+ *             made of the same paper. Asserted at SEPARATION_FLOOR contrast in
+ *             every palette, and at TINT_FLOOR of the ground's OKLab chroma —
+ *             both in test/contrast.test.js. THIS IS THE CATEGORY THE REVIEW
+ *             TURNED ON. There is deliberately no separate, larger floor for
+ *             this role: one used to live here as `planeFloor`, and imposing it
+ *             on 珊瑚 is what flattened its authored card.
  *   mirror    deliberately the same value as another token, because it IS that
  *             token under a second name. Recorded as an equality so the two
  *             cannot drift apart silently.
@@ -71,7 +75,6 @@ const redact = (p) => (HOME && p.startsWith(HOME) ? '~' + p.slice(HOME.length) :
  *             is a hardcoded near-white no token can reach.
  *   overlay   a dimming scrim.
  */
-const PLANE_FLOOR = 1.06
 
 const ROLES = {
   '--dsw-alias-bg-base': ['ground', 'the page: everything below is measured against it'],
@@ -269,7 +272,6 @@ const payload = {
     roots: ROOTS.map(redact),
     surfaces: entries.length,
   },
-  planeFloor: PLANE_FLOOR,
   entries,
 }
 const serialized = JSON.stringify(payload, null, 2) + '\n'
@@ -294,7 +296,7 @@ if (process.argv.includes('--check')) {
 
 writeFileSync(OUT, serialized)
 const counts = entries.reduce((acc, e) => { acc[e.role] = (acc[e.role] || 0) + 1; return acc }, {})
-console.log(`scanned ${entries.length} surface(s) painted by the installed UI — floor ${PLANE_FLOOR}`)
+console.log(`scanned ${entries.length} surface(s) painted by the installed UI`)
 console.log(`wrote ${redact(OUT)}`)
 for (const [k, n] of Object.entries(counts).sort()) console.log(`  ${k.padEnd(13)} ${n}`)
 if (unclassified.length) {

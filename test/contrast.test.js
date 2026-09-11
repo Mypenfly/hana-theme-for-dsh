@@ -566,10 +566,17 @@ for (const { id: themeName, tokens } of PALETTES) {
  *
  * Three properties, each with its own reason:
  *
- *   plane      reads at least `planeFloor` from the ground. The floor is not
- *              invented: 纸本's layer-1 and layer-2 already sat at 1.065-1.070
- *              and DID read as surfaces, so the line is "at least as separated
- *              as the ones that work".
+ *   plane      reads at least `separationFloor` from the ground — the SAME floor
+ *              its neighbours are held to. An earlier revision held planes to a
+ *              larger floor of its own (1.06), generalised from 纸本's working
+ *              surfaces. That was invented, and it is what destroyed 珊瑚's
+ *              card: the reference authors it at #FFFBF3, a 1.033 step, because
+ *              a card is told apart by its hairline and shadow. See #34 for the
+ *              damage a lightness-only ladder does to a warm palette.
+ *   tint       a plane keeps the ground's hue. A surface can clear every
+ *              contrast floor and still be wrong, because contrast says nothing
+ *              about COLOUR: 珊瑚's card sat at a comfortable 1.081 while being
+ *              a neutral grey on a warm cream page. See #34.
  *   mirror     equals the token it names. A deliberate tie is a system; an
  *              accidental one is a bug, and the only way to tell them apart is
  *              to make the deliberate ones explicit.
@@ -582,8 +589,11 @@ const nodePath = require('path');
 const SURFACE_LEDGER = JSON.parse(
   fs.readFileSync(nodePath.join(__dirname, 'surface-roles.json'), 'utf8'),
 );
-const PLANE_FLOOR = SURFACE_LEDGER.planeFloor;
 const SEPARATION_FLOOR = 1.02;
+/* How much of the ground's OKLab chroma a plane must keep. Not 1.0: a well may
+   legitimately be greyer than the page. But a plane that has lost more than half
+   of it has stopped being made of the same paper. */
+const TINT_FLOOR = 0.45;
 const SEPARATION_PAIRS = [
   ['--dsw-alias-bg-layer-1', '--dsw-specific-bubble', 'an assistant bubble and a tool card are visible at the same moment'],
   ['--dsw-specific-bubble', '--dsw-alias-markdown-code-block', 'a code block inside a bubble'],
@@ -594,6 +604,8 @@ const SEPARATION_PAIRS = [
   ['--dsw-alias-bg-layer-1', '--dsw-specific-tip', 'a callout on a card'],
 ];
 let surfaceAssertions = 0;
+let planeTintAssertions = 0;
+let labelPairAssertions = 0;
 const surfaceLookup = (tokens, name) =>
   tokens[name] !== undefined ? tokens[name] : tokens[name.replace('--dsw-alias-', '--dsw-specific-')];
 
@@ -606,11 +618,29 @@ for (const { id: themeName, tokens } of PALETTES) {
     if (value === undefined) continue;
     surfaceAssertions += 1;
     const ratio = contrast(value, ground);
-    if (ratio < PLANE_FLOOR) {
+    if (ratio < SEPARATION_FLOOR) {
       failures.push(
         `#33 ${themeName}: ${entry.name} is ${ratio.toFixed(3)}:1 against bg-base, below the ` +
-          `${PLANE_FLOOR} floor, so it reads as part of the ground rather than as a surface. (${entry.why})`,
+          `${SEPARATION_FLOOR} floor, so it reads as part of the ground rather than as a surface. (${entry.why})`,
       );
+    }
+    /* #34 — and it must still look like the same paper. Measured in OKLab, where
+       equal a/b means equal perceived hue and chroma at any lightness, so this
+       compares the plane's tint against the ground's independently of how far
+       apart they sit. */
+    if (typeof value === 'string' && value.startsWith('#')) {
+      planeTintAssertions += 1;
+      const g = oklab(ground);
+      const p = oklab(value);
+      const groundChroma = Math.hypot(g.a, g.b);
+      const planeChroma = Math.hypot(p.a, p.b);
+      if (groundChroma >= 0.004 && planeChroma < TINT_FLOOR * groundChroma) {
+        failures.push(
+          `#34 ${themeName}: ${entry.name} is ${value}, whose OKLab chroma is ${planeChroma.toFixed(4)} ` +
+            `against the ground's ${groundChroma.toFixed(4)} — under ${TINT_FLOOR} of it, so this surface is a ` +
+            `grey panel on a ${ground} page rather than a piece of it. (${entry.why})`,
+        );
+      }
     }
   }
 
@@ -638,6 +668,46 @@ for (const { id: themeName, tokens } of PALETTES) {
       failures.push(
         `#33 ${themeName}: ${inner} on ${outer} is ${ratio.toFixed(3)}:1, below ${SEPARATION_FLOOR} — ` +
           `${why}, and they read as one surface`,
+      );
+    }
+  }
+}
+
+/* ── #35: the inverted label must actually be inverted ─────────────────────
+ *
+ * `label-primary-inverted` is not decorative, and three shipped surfaces prove
+ * it: the sidebar's local-build badge paints it ON label-primary
+ * (`background: var(--dsw-alias-label-primary)`), the attachment remove button
+ * paints it on button-contrast-fill, and the official wordmark draws its
+ * HARNESS badge as a `currentColor` plate — which resolves to label-primary —
+ * with these glyphs on top. 珊瑚 shipped the token EQUAL to label-primary
+ * (#1A3049 both), so that badge rendered as a solid ink-blue block with the
+ * word invisible: exactly the defect the theme's own user reported seeing.
+ *
+ * The stock theme settles what the token means. It declares it as
+ * bluish-00 (#fff) in light mode and bluish-800 (#353638) in dark — the
+ * CONTRAST of label-primary, in both directions. So both plate pairings are
+ * asserted. A palette on which one of them cannot hold has to change the
+ * PLATE, which is what 珊瑚's button-contrast-fill did: a mid-light coral plate
+ * stranded a near-white glyph at 2.46:1, so the plate became the ink blue that
+ * HanaAgent's own coral theme uses for --accent.
+ */
+const PLATE_PAIRS = [
+  ['--dsw-alias-label-primary', 'the sidebar build badge and the official HARNESS wordmark'],
+  ['--dsw-alias-button-contrast-fill', 'the attachment remove button'],
+];
+for (const { id: themeName, tokens } of PALETTES) {
+  const ink = tokens['--dsw-alias-label-primary-inverted'];
+  if (ink === undefined) continue;
+  for (const [plateName, why] of PLATE_PAIRS) {
+    const plate = surfaceLookup(tokens, plateName);
+    if (plate === undefined) continue;
+    labelPairAssertions += 1;
+    const ratio = contrast(ink, plate);
+    if (ratio < 4.5) {
+      failures.push(
+        `#35 ${themeName}: --dsw-alias-label-primary-inverted (${ink}) on ${plateName} (${plate}) is only ` +
+          `${ratio.toFixed(2)}:1 — ${why} paints precisely that pair, so the word or the glyph vanishes.`,
       );
     }
   }
@@ -672,6 +742,8 @@ const assertions =
   1 + // #28, the seal reuses an asserted pair
   rampAssertions +
   surfaceAssertions +
+  planeTintAssertions +
+  labelPairAssertions +
   hoverAssertions +
   elevationAssertions +
   separationAssertions;
@@ -684,7 +756,8 @@ console.log(
   `contrast: ${assertions} assertions pass (${PAIRS.length} pairs x ${Object.keys(THEMES).length} palettes ` +
     `+ ${polarityAssertions} polarity + 2 link band + 1 soft-light neutrality + ${grainAssertions} grain-composite ` +
     `+ ${syntaxAssertions} syntax: ${SYNTAX_TOKENS.length} tokens x ${PALETTES.length} palettes + ${PALETTES.length} spread ` +
-    `+ 1 seal-pair + ${rampAssertions} ink-ramp shape + ${surfaceAssertions} surface ladder ` +
+    `+ 1 seal-pair + ${rampAssertions} ink-ramp shape + ${surfaceAssertions} surface ladder + ${planeTintAssertions} plane tint ` +
+    `+ ${labelPairAssertions} inverted-label plate ` +
     `+ ${hoverAssertions} hover direction ` +
     `+ ${elevationAssertions} elevation model + ${separationAssertions} recorded link/error separation)`,
 );
