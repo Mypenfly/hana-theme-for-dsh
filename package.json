@@ -50,7 +50,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node test/check.js && node test/tokens.test.js && node test/surfaces.test.js && node test/contrast.test.js && node tools/derive-shiki.mjs --check && node test/runtime.test.js && node test/selftest.js",
+    "test": "node test/check.js && node test/tokens.test.js && node test/surfaces.test.js && node test/contrast.test.js && node tools/derive-shiki.mjs --check && node tools/derive-ink-ramp.mjs --check && node test/runtime.test.js && node test/selftest.js",
     "check": "node test/check.js",
     "tokens": "node test/tokens.test.js",
     "surfaces": "node test/surfaces.test.js",
@@ -69,7 +69,9 @@
     "shiki:check": "node tools/derive-shiki.mjs --check",
     "probe": "node test/dom-probe.js --print",
     "allowlist:check": "node tools/refresh-allowlist.mjs --check",
-    "surfaces:check": "node tools/scan-color-surfaces.mjs --check"
+    "surfaces:check": "node tools/scan-color-surfaces.mjs --check",
+    "derive:ink": "node tools/derive-ink-ramp.mjs",
+    "ink:check": "node tools/derive-ink-ramp.mjs --check"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"

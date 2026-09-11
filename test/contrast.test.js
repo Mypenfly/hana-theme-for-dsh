@@ -335,6 +335,76 @@ if (seal) {
   }
 }
 
+/* ── #29: the ink ramp has a shape, not five hand-picked values ────────────
+ *
+ * `skin.json` and the L1 header both call this theme five ink stops. It shipped
+ * as four, with four different rhythms:
+ *
+ *   palette   primary  secondary  tertiary  caption  dimmed     upper steps
+ *   paper      13.12     8.50      5.28      5.28     3.13     .65  .62
+ *   midnight    7.51     5.18      4.52      4.52     2.70     .69  .87
+ *   coral      12.52     9.73      4.72      4.72     2.91     .78  .49
+ *   vivid      11.74     9.50      7.44      7.44     4.90     .81  .78
+ *
+ * Two failures, and only the first is cosmetic:
+ *
+ *   · `caption` was IDENTICAL to `tertiary` everywhere — a step of 1.00, i.e.
+ *     two named levels of hierarchy rendered as one colour. Upstream DSH keeps
+ *     them 14.5 L* apart in both modes.
+ *   · the middle step ran from .49 to .87, so "secondary" and "tertiary" meant
+ *     visibly different things from palette to palette. 22 and 23 consumers,
+ *     all of them prose.
+ *
+ * The ramp is now geometric: `secondary` is the geometric mean of `primary` and
+ * `tertiary` in CONTRAST RATIO, which is what removes the arbitrary middle
+ * value, and `caption`/`dimmed` continue below at f^2.5 and f^3.
+ *
+ * These two assertions state the SHAPE, independently of
+ * tools/derive-ink-ramp.mjs, which pins the exact values. Asserting only the
+ * values would make the tool and the test the same claim twice; asserting only
+ * the shape would let the values drift anywhere the shape permits.
+ */
+const RAMP_STOPS = ['label-primary', 'label-secondary', 'label-tertiary', 'label-caption', 'label-dimmed'];
+/* Every adjacent step must reduce contrast: 1.00 is the bug, and anything above
+   .90 is a step a reader cannot see. */
+const MAX_STEP = 0.9;
+/* The upper ramp is geometric to within this much. An 8-bit colour cannot hit
+   an arbitrary ratio exactly -- the achievable contrasts are quantised -- so
+   the bound is set by that, not by convenience. The measured worst is 0.33%,
+   and the states this catches were 21% (midnight) and 60% (coral) off. */
+const GEOMETRIC_TOLERANCE = 0.015;
+let rampAssertions = 0;
+
+for (const { id: themeName, tokens } of PALETTES) {
+  const at = (short) => tokens['--dsw-alias-' + short];
+  const baseId = 'bg-base';
+  const ramp = RAMP_STOPS.map((s) => ({ s, c: contrast(at(s), at(baseId)) }));
+
+  for (let i = 1; i < ramp.length; i += 1) {
+    rampAssertions += 1;
+    const step = ramp[i].c / ramp[i - 1].c;
+    if (!(step < MAX_STEP)) {
+      failures.push(
+        `#29 ${themeName}: ${ramp[i].s} is ${step.toFixed(3)}x ${ramp[i - 1].s} in contrast ` +
+          `(${ramp[i].c.toFixed(2)}:1 against ${ramp[i - 1].c.toFixed(2)}:1) — a step of ` +
+          `${step >= 0.999 ? 'exactly 1.00 means the two levels are the SAME COLOUR' : `only ${((1 - step) * 100).toFixed(0)}% is not a visible level`}`,
+      );
+    }
+  }
+
+  rampAssertions += 1;
+  const [p, s, t] = ramp.map((x) => x.c);
+  const evenness = (s * s) / (p * t);
+  if (Math.abs(evenness - 1) > GEOMETRIC_TOLERANCE) {
+    failures.push(
+      `#29 ${themeName}: the upper ink ramp is not geometric — secondary^2/(primary*tertiary) = ` +
+        `${evenness.toFixed(4)}, want 1.0000 +/-${GEOMETRIC_TOLERANCE}. Measured ${p.toFixed(2)}:1 / ` +
+        `${s.toFixed(2)}:1 / ${t.toFixed(2)}:1, so secondary is not the even step between the two ` +
+        'anchors and the palette reads with a different hierarchy from its siblings',
+    );
+  }
+}
+
 /* ── report ─────────────────────────────────────────────────────────────── */
 
 if (process.argv.includes('--verbose')) {
@@ -361,7 +431,8 @@ const assertions =
   1 +
   grainAssertions +
   syntaxAssertions +
-  1; // #28, the seal reuses an asserted pair
+  1 + // #28, the seal reuses an asserted pair
+  rampAssertions;
 if (failures.length) {
   console.error(`contrast: ${failures.length} FAILED of ${assertions} assertions\n`);
   for (const f of failures) console.error('  ✗ ' + f);
@@ -371,5 +442,5 @@ console.log(
   `contrast: ${assertions} assertions pass (${PAIRS.length} pairs x ${Object.keys(THEMES).length} palettes ` +
     `+ ${polarityAssertions} polarity + 2 link band + 1 soft-light neutrality + ${grainAssertions} grain-composite ` +
     `+ ${syntaxAssertions} syntax: ${SYNTAX_TOKENS.length} tokens x ${PALETTES.length} palettes + ${PALETTES.length} spread ` +
-    `+ 1 seal-pair)`,
+    `+ 1 seal-pair + ${rampAssertions} ink-ramp shape)`,
 );

@@ -176,12 +176,34 @@ const MUTATIONS = [
     find: ',\n      "declined": "a FONT channel, not a colour: this theme restyles the reading typography (--dsw-font-markdown-*) and deliberately leaves the UI chrome face alone. Its fallback, `ui-monospace, monospace`, is already the right stack."\n',
     replace: '\n',
   },
+
+  /* ── the ink ramp (test/contrast.test.js #29) ─────────────────────────────
+   * Both mutations restore a value this project actually shipped. A gate for
+   * "the hierarchy has a shape" is worth nothing unless it fails on the shape
+   * that was there before. */
+  {
+    id: 'caption-tied-to-tertiary',
+    why: 'restores 纸本\'s shipped caption, which was byte-identical to its tertiary — two named levels of hierarchy rendered as one colour, and the reason the theme documented five ink stops while shipping four',
+    suite: 'ramp',
+    marker: 'the SAME COLOUR',
+    find: '      "--dsw-alias-label-caption": "#7C7066",\n',
+    replace: '      "--dsw-alias-label-caption": "#6B6158",\n',
+  },
+  {
+    id: 'ramp-middle-made-arbitrary',
+    why: 'restores 珊瑚\'s shipped secondary, which sat 60% off the even step between its two anchors — the palette read with a visibly different hierarchy from its siblings',
+    suite: 'ramp',
+    marker: 'is not geometric',
+    find: '      "--dsw-alias-label-secondary": "#405062",\n',
+    replace: '      "--dsw-alias-label-secondary": "#314153",\n',
+  },
 ];
 
 const verbose = process.argv.includes('--verbose');
 const SUITES = {
   runtime: path.join(__dirname, 'runtime.test.js'),
   tokens: path.join(__dirname, 'tokens.test.js'),
+  ramp: path.join(__dirname, 'contrast.test.js'),
 };
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'hana-selftest-'));
 
