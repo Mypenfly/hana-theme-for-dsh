@@ -76,7 +76,10 @@
     "surfaces:roles": "node tools/scan-surface-roles.mjs",
     "surfaces:roles:check": "node tools/scan-surface-roles.mjs --check",
     "verify:surfaces": "node test/verify/surface-check.mjs",
-    "verify:surfaces:shot": "node test/verify/surface-check.mjs --keep"
+    "verify:surfaces:shot": "node test/verify/surface-check.mjs --keep",
+    "geometry:scan": "node tools/scan-geometry.mjs",
+    "geometry:check": "node tools/scan-geometry.mjs --check",
+    "geometry:list": "node tools/scan-geometry.mjs --list"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"
