@@ -92,13 +92,32 @@ check(
 
 /* 8 — every rule must be scoped to a hana theme. An unscoped rule would apply
    to the built-in themes too, which is exactly the "installed a theme and it
-   repainted my UI" failure this plugin is built to avoid. */
+   repainted my UI" failure this plugin is built to avoid.
+ *
+ * A rule may narrow the scope to ONE palette as well (body[data-hana-theme='coral']),
+ * which is a narrowing rather than an escape -- but only if the value it names is
+ * a palette this plugin actually ships. The first version tested the literal
+ * prefix `body[data-hana-theme]`, and that is a proxy for "scoped" rather than the
+ * thing itself: it rejected a correct palette-keyed rule while cheerfully
+ * accepting `body[data-hana-theme='no-such-palette']`. It now resolves the value
+ * against the shipped palette ids, so a typo is caught instead of waved through. */
+const paletteAttrs = new Set(client.PALETTES.map((p) => p.id.replace('hana-', '')));
+const scopedToHana = (s) => {
+  if (s.startsWith('body[data-hana-theme]')) return true;
+  const m = /^body\[data-hana-theme='([^']*)'\]/.exec(s);
+  return m !== null && paletteAttrs.has(m[1]);
+};
 const selectors = [...bare.matchAll(/(^|\})([^{}]+)\{/g)]
   .map((m) => m[2].trim())
   .filter((s) => s && !s.startsWith('@'))
   .flatMap((s) => s.split(',').map((part) => part.trim()));
-const unscoped = selectors.filter((s) => s && !s.startsWith('body[data-hana-theme]'));
+const unscoped = selectors.filter((s) => s && !scopedToHana(s));
 check(unscoped.length === 0, `CSS has rules not scoped to body[data-hana-theme]: ${unscoped.join(' | ')}`);
+check(
+  paletteAttrs.size === 4 && [...paletteAttrs].every((v) => /^[a-z-]+$/.test(v)),
+  `the scoping check derived ${paletteAttrs.size} palette attribute value(s) from PALETTES ` +
+    `(${[...paletteAttrs].join(', ')}); with none, a palette-keyed rule would be checked against nothing`,
+);
 
 /* 9 — `!important` would mean fighting the cascade instead of out-specifying it,
    and it also beats the user's own overrides. Phase 2's radius work is designed
@@ -736,6 +755,154 @@ check(
       ". HanaAgent's rule is --border-width: 0.5px, and a var() hides the value from any " +
       'literal-only check.',
   );
+}
+
+/* ── the 焦点墨环 ────────────────────────────────────────────────────────
+ *
+ * HanaAgent deletes the DEFAULT focus ring globally (styles.css:288,
+ * `:focus, :focus-visible { outline: none !important }`, asserted by its own
+ * vitest) and then draws its own per component -- and the ring it draws is ONE
+ * colour, `var(--accent)`, at 1px or 2px with an offset of +/-2px. DSH's ring
+ * GEOMETRY is already that; its COLOUR is five different families across 31
+ * rules, every one of them keyed on a build hash. Under 珊瑚 two of those are
+ * #A8432A and #F37E63, and #F37E63 measures 2.45:1 on its ground -- below the
+ * 3:1 WCAG 1.4.11 asks of a non-text indicator. That is the 橙框.
+ *
+ * So this block is one property, `outline-color`, and every judgement below
+ * guards a way it can fail while still looking written.
+ */
+const focusSel = "body[" + "data-hana-theme" + "][" + "data-hana-focus" + "='accent']";
+{
+  /* The attribute has to be WRITTEN, or these rules are dead CSS that passes
+     every text assertion ever written about them. */
+  check(
+    /setAttribute\(\s*FOCUS_ATTR/.test(source),
+    'nothing sets the focus attribute, so every --hana-ring rule is dead CSS: the ring would stay ' +
+      'whatever DSH shipped while the stylesheet looks correct',
+  );
+  check(
+    /removeAttribute\(\s*FOCUS_ATTR\s*\)/.test(source),
+    'the focus attribute is never removed on detach, so it survives the plugin being stopped',
+  );
+
+  /* Find the rule itself, selector and body, so the specificity below is read off
+     the shipped text rather than off a constant repeated from this file. The
+     finder accepts the SHORTHAND too -- it did not at first, and the mutation
+     that swaps outline-color for `outline: 1px solid var(--hana-ring)` then made
+     the rule unfindable, so the judgement reported "no rule sets outline-color"
+     and the shorthand assertion never ran. A guard that can only see the correct
+     spelling cannot catch a wrong one. */
+  const ringRule = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].find(
+    (m) => /(^|[^-])outline[a-z-]*\s*:[^;}]*var\(--hana-ring\)/.test(m[2]),
+  );
+  check(ringRule !== undefined, 'no rule sets an outline from var(--hana-ring)');
+  if (ringRule) {
+    const ringSelector = ringRule[1].trim();
+    const parts = ringSelector.split(',').map((s) => s.trim());
+
+    /* Only the COLOUR may change. Writing the `outline` shorthand would give a
+       ring to elements that deliberately have none -- DSH ships 32 of those,
+       every one of them an input that shows focus some other way. */
+    check(
+      /(^|[^-])outline-color:\s*var\(--hana-ring\)/.test(ringRule[2]),
+      'the focus rule does not set outline-color: var(--hana-ring)',
+    );
+    check(
+      !/(^|[^-])outline\s*:/.test(ringRule[2]),
+      'the focus rule writes the outline SHORTHAND. outline-color is inert while outline-style is ' +
+        'none, which is what keeps this from inventing an indicator on the 32 DSH rules that ' +
+        'deliberately have none; the shorthand would override that.',
+    );
+
+    /* `:focus-visible *` is not decoration: exactly one DSH rule paints a ring on
+       a DESCENDANT of the focused element, and `:focus-visible` alone never
+       matches it, so that one ring keeps the old colour and the app is left with
+       two focus colours. */
+    check(
+      parts.includes(focusSel + ' :focus-visible'),
+      'the focus rule does not carry the plain selector "' + focusSel + ' :focus-visible"',
+    );
+    check(
+      parts.includes(focusSel + ' :focus-visible *'),
+      'the focus block does not carry the descendant selector "' + focusSel + ' :focus-visible *". ' +
+        'DSH has exactly one rule that rings a descendant of the focused element ' +
+        '(._6nu5Ca_memberButton:focus-visible ._6nu5Ca_memberLabelWrap); without it that ring stays ' +
+        'on the old colour and the app is left with two focus colours.',
+    );
+
+    /* Specificity. Judgement 1 forbids !important, so the rule must out-rank the
+       real ceiling of DSH's 31 outline rules, which is measured at (0,3,0). The
+       selector carries body + two attributes + a pseudo-class = (0,3,1); with one
+       attribute it would be (0,2,1) and lose. This is the same arithmetic as the
+       seal clamp's, and it fails just as silently. */
+    const attrs = (parts[0].match(/\[[^\]]+\]/g) || []).length;
+    const pseudo = (parts[0].match(/:(?!:)[\w-]+/g) || []).length;
+    check(
+      attrs === 2 && pseudo === 1,
+      'the focus selector "' + parts[0] + '" is (' + attrs + ' attribute, ' + pseudo + ' pseudo-class). ' +
+        '(0,3,1) needs exactly two attributes and one pseudo-class on top of body; at (0,2,1) it loses ' +
+        'to the (0,3,0) DSH rule that rings a workflow member label.',
+    );
+  }
+
+  /* Every palette must resolve to a ring, and to a DISTINCT rule rather than by
+     accident. tools/derive-focus.mjs does the colour binding (it needs the
+     reference); this only insists the resolution exists at all. */
+  const generic = [...css.matchAll(/--hana-ring:\s*var\(\s*(--[A-Za-z0-9-]+)\s*\)/g)].map((m) => m[1]);
+  check(
+    generic.length > 0,
+    'no --hana-ring is declared at all; the focus rule would resolve to nothing and every ring ' +
+      'would fall back to inherit',
+  );
+}
+
+/* ── the 玻璃层 ──────────────────────────────────────────────────────────
+ *
+ * The reference's `--bg-glass` dresses the small chips that hover over content
+ * (its find box, markdown badge, preview hint, code-copy tooltip). DSH has one
+ * surface with that job -- the 回到底部 button, position: sticky over the message
+ * list -- plus the design system's own toolbar token, which DSH ships with an
+ * alpha (#54555780) and nothing installed paints.
+ *
+ * The failure this guards is the one this theme actually committed: flattening a
+ * translucent surface into an opaque plate. It is invisible in review, because a
+ * hex and an rgba look equally deliberate, and it is invisible at rest, because
+ * the plate only differs from the page when something is behind it.
+ */
+{
+  const glassProps = [
+    '--dsw-alias-button-floating-fill',
+    '--dsw-alias-button-tool-bar-fill',
+    '--dsw-alias-button-tool-bar-fill-invisible',
+  ];
+  for (const palette of client.PALETTES) {
+    for (const name of glassProps) {
+      const value = palette.tokens[name];
+      check(value !== undefined, palette.id + ' does not supply ' + name);
+      if (value === undefined) continue;
+      const alpha = /rgba\([^)]*,\s*([\d.]+)\s*\)/.exec(value);
+      check(
+        alpha !== null,
+        palette.id + ': ' + name + ' is ' + value + ', an opaque colour. This token IS the design ' +
+          "system's translucent-surface slot (DSH ships #54555780 / #54555799) and the reference's " +
+          '--bg-glass is the same idea; an opaque value here is a chip painted as a sticker.',
+      );
+      if (alpha) {
+        const a = Number(alpha[1]);
+        check(
+          a >= 0 && a <= 0.95,
+          palette.id + ': ' + name + ' has alpha ' + a + '. The reference caps its glass at .94 ' +
+            '(and only in the CONTRAST variants); anything at or above .95 is a plate again.',
+        );
+      }
+    }
+    check(
+      palette.tokens['--dsw-alias-button-tool-bar-fill-invisible'] !== undefined &&
+        /,\s*0\s*\)/.test(palette.tokens['--dsw-alias-button-tool-bar-fill-invisible']),
+      palette.id + ': button-tool-bar-fill-invisible is not alpha 0, so the family loses the ' +
+        'bottom of its ladder (0 -> glass -> opaque)',
+    );
+  }
 }
 
 /* ── the geometry ledger, validated OFFLINE ─────────────────────────────

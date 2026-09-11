@@ -47,7 +47,7 @@
  */
 
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadClient } from '../test/load-client.js';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -104,6 +104,15 @@ const rgba = (hex, alpha) => {
 const failures = [];
 const changes = {};
 
+/* Exported so tools/derive-glass.mjs can read the ladder rather than restate it:
+   a glass chip's hover step IS the palette's hover step, and two copies of that
+   table would be exactly the drift this project keeps finding. The script body
+   below is therefore guarded -- importing this file must not run the gate. */
+export { LADDER, STEPS, CONSUMERS, UNCONSUMED, inkOf, rgba };
+
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isMain) {
 for (const palette of PALETTES) {
   const lad = LADDER[palette.id];
   if (!lad) { failures.push(`no ladder declared for ${palette.id}; add its source theme`); continue; }
@@ -179,3 +188,4 @@ if (check) {
 
 console.error('usage: node tools/derive-wash.mjs --check | --json | --list');
 process.exit(2);
+}

@@ -38,7 +38,13 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loadClient } from '../load-client.js';
 
-const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+/* The REPO root. This was `dirname(dirname(...))` of a file in test/verify, i.e.
+   one level short, so `path.join(ROOT, 'test', 'verify', ...)` wrote screenshots
+   into test/test/verify/ -- and the .gitignore entries that were supposed to
+   cover them named the path they were never written to. Harmless while the
+   probe deletes its own screenshots, and confusing the moment one survives a
+   crash. test/verify/surface-check.mjs had it right (REPO = HERE/../..). */
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const HANA = loadClient().exports;
 
 /* ── the real rules, read out of the installed bundles ───────────────────── */

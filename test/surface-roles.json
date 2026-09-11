@@ -230,9 +230,8 @@
     },
     {
       "name": "--dsw-alias-button-floating-fill",
-      "role": "mirror",
-      "mirrorOf": "bg-layer-1",
-      "why": "",
+      "role": "glass",
+      "why": "the 回到底部 chip: sticky over the message list",
       "paintedAs": "background",
       "by": [
         "dsh-client-ui-chat",
@@ -241,8 +240,8 @@
     },
     {
       "name": "--dsw-alias-button-floating-hover",
-      "role": "fill",
-      "why": "",
+      "role": "glass",
+      "why": "the 回到底部 chip, pointed at",
       "paintedAs": "background",
       "by": [
         "dsh-client-ui-chat",
@@ -305,9 +304,8 @@
     },
     {
       "name": "--dsw-alias-button-tool-bar-fill",
-      "role": "mirror",
-      "mirrorOf": "bg-layer-1",
-      "why": "",
+      "role": "glass",
+      "why": "the design system's translucent toolbar; no call site renders the variant",
       "paintedAs": "background",
       "by": [
         "dsh-client-ui-primitives",
@@ -316,8 +314,8 @@
     },
     {
       "name": "--dsw-alias-button-tool-bar-hover",
-      "role": "fill",
-      "why": "",
+      "role": "glass",
+      "why": "DSH ships .60 against the fill's .50 -- the same surface, one step on",
       "paintedAs": "background",
       "by": [
         "dsh-client-ui-primitives",

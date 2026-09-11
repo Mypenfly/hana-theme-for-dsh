@@ -357,6 +357,74 @@ const MUTATIONS = [
     find: 'color-mix(in srgb, var(--dsw-alias-label-primary) 3%, transparent)',
     replace: 'rgba(26,48,73,0.03)',
   },
+  {
+    id: 'glass-flattened-into-a-plate',
+    why: "puts 纸本's floating chip back to the opaque card it shipped as. DSH declares its toolbar surface at 50% alpha and HanaAgent's --bg-glass is the same idea, so an opaque value here is this theme overriding a translucent surface with a sticker — and nothing at rest shows it, because a plate only differs from the page when there is something behind it",
+    suite: 'check',
+    marker: 'an opaque colour',
+    find: '      "--dsw-alias-button-floating-fill": "rgba(253,248,239,0.92)",\n',
+    replace: '      "--dsw-alias-button-floating-fill": "#FDF8EF",\n',
+  },
+  {
+    id: 'glass-hue-from-nowhere',
+    why: "gives 纸本's chip DSH's own toolbar grey (#545557 at 92%) instead of the palette's paper. Every alpha assertion still passes — it IS translucent — and the chip becomes a cold grey sticker on a warm cream page, which is the failure a threshold on alpha alone cannot see",
+    suite: 'ramp',
+    marker: 'not a colour of its own',
+    find: '      "--dsw-alias-button-floating-fill": "rgba(253,248,239,0.92)",\n',
+    replace: '      "--dsw-alias-button-floating-fill": "rgba(84,85,87,0.92)",\n',
+  },
+  {
+    id: 'glass-hover-as-an-alpha-step',
+    why: "carries DSH's own .50 -> .60 step to .92, which clamps to 1.00. The hover then moves the chip by about 1/255 over paper: a hover that is written, plausible, and invisible. The reference lays an ink wash over the chip instead, and HOVER_FLOOR is what tells the two apart",
+    suite: 'glass',
+    marker: 'against a floor of',
+    find: '      "--dsw-alias-button-floating-hover": "rgba(245,240,231,0.92)",\n',
+    replace: '      "--dsw-alias-button-floating-hover": "#FDF8EF",\n',
+  },
+  {
+    id: 'glass-off-the-reference-alpha',
+    why: "drops 斑斓's glass from .94 to .92, i.e. to the value every NON-contrast theme uses. Only the two contrast variants reach .94 in HanaAgent, and that is the whole point of them — less bleed-through — so this silently makes 斑斓 the same glass as 青夜",
+    suite: 'glass',
+    marker: 'off the reference',
+    find: '      "--dsw-alias-button-floating-fill": "rgba(38,52,61,0.94)",\n',
+    replace: '      "--dsw-alias-button-floating-fill": "rgba(38,52,61,0.92)",\n',
+  },
+  {
+    id: 'focus-ring-back-to-the-harness-colour',
+    why: "re-points 珊瑚's ring at its brand plate, which IS the coral vermilion #F37E63 — and that measures 2.45:1 on its ground, below the 3:1 WCAG 1.4.11 asks of a non-text indicator. It is also the exact 橙框 the theme's user reported, and the reason the reference's own coral theme rings in ink blue instead",
+    suite: 'focus',
+    marker: 'draws its focus ring in --accent',
+    find:
+      '      "body[" + BODY_ATTR + "=\'coral\'][" + FOCUS_ATTR + "=\'accent\'] {",\n' +
+      '      "  --hana-ring: var(--dsw-alias-button-primary-fill);",\n',
+    replace:
+      '      "body[" + BODY_ATTR + "=\'coral\'][" + FOCUS_ATTR + "=\'accent\'] {",\n' +
+      '      "  --hana-ring: var(--dsw-alias-brand-primary);",\n',
+  },
+  {
+    id: 'focus-loses-the-descendant-selector',
+    why: "drops `:focus-visible *`. Exactly one DSH rule rings a DESCENDANT of the focused element (._6nu5Ca_memberButton:focus-visible ._6nu5Ca_memberLabelWrap) and `:focus-visible` alone never matches it, so that ring keeps the harness's colour and the app is left with two focus colours — one of which is the orange box. The replacement is the PLAIN selector rather than nothing: deleting the line outright leaves the rule with a trailing comma and no opening brace, so the mutation would 'fail' as unbalanced braces and prove nothing",
+    suite: 'check',
+    marker: 'does not carry the descendant selector',
+    find: '      "body[" + BODY_ATTR + "][" + FOCUS_ATTR + "=\'accent\'] :focus-visible * {",\n',
+    replace: '      "body[" + BODY_ATTR + "][" + FOCUS_ATTR + "=\'accent\'] :focus-visible {",\n',
+  },
+  {
+    id: 'focus-writes-the-outline-shorthand',
+    why: "swaps outline-color for the outline shorthand. outline-color is inert while outline-style is none, which is exactly what keeps this block from inventing an indicator on the 32 DSH rules that deliberately have none; the shorthand gives every one of them a ring, and the app gains focus boxes it never had",
+    suite: 'check',
+    marker: 'writes the outline SHORTHAND',
+    find: '      "  outline-color: var(--hana-ring);",\n',
+    replace: '      "  outline: 1px solid var(--hana-ring);",\n',
+  },
+  {
+    id: 'palette-keyed-rule-names-a-ghost-palette',
+    why: "misspells the palette attribute value ('corral'). The first version of judgement 8 tested the literal prefix `body[data-hana-theme]`, which would have waved this through while rejecting a correct palette-keyed rule — the rule never matches, and 珊瑚 silently falls back to the generic ring, i.e. to the coral it was keyed there to avoid",
+    suite: 'check',
+    marker: 'not scoped to body[data-hana-theme]',
+    find: '      "body[" + BODY_ATTR + "=\'coral\'][" + FOCUS_ATTR + "=\'accent\'] {",\n',
+    replace: '      "body[" + BODY_ATTR + "=\'corral\'][" + FOCUS_ATTR + "=\'accent\'] {",\n',
+  },
 ];
 
 const verbose = process.argv.includes('--verbose');
@@ -368,6 +436,8 @@ const SUITES = {
   /* A suite may carry its own arguments, because a derivation tool proves itself
      with --check rather than by being pointed at a file. */
   wash: [path.join(ROOT, 'tools', 'derive-wash.mjs'), '--check'],
+  glass: [path.join(ROOT, 'tools', 'derive-glass.mjs'), '--check'],
+  focus: [path.join(ROOT, 'tools', 'derive-focus.mjs'), '--check'],
 };
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'hana-selftest-'));
 

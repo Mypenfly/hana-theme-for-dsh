@@ -428,6 +428,12 @@ section('11 — the ornament settings reach the DOM');
      agree or the first paint jumps when the scope binds (check.js asserts they
      agree in source; here is the value that actually lands). */
   eq(attrs()['data-hana-shape'], 'soft', 'the default corner setting is not soft');
+  /* The focus ring is on by default, unlike the corner setting: it is a FIX, not
+     a taste. The reference draws every focus ring in one colour (its --accent)
+     and DSH spends five, one of which is 珊瑚's coral vermilion at 2.45:1 --
+     below the 3:1 WCAG 1.4.11 asks of a non-text indicator. The switch stays as
+     the escape hatch back to the harness's own colours. */
+  eq(attrs()['data-hana-focus'], 'accent', 'the default focus-ring setting is not accent');
   /* ON by default since the second aesthetic review: the user asked for the paper
      to read as paper, and the grain is the layer that carries it. The switch stays
      for anyone who wants the flat colour back. */
@@ -449,6 +455,11 @@ section('11 — the ornament settings reach the DOM');
 
   env.toggle('极方圆角');
   eq(attrs()['data-hana-shape'], 'seal', 'the corner switch did not reach the DOM');
+
+  env.toggle('焦点墨环');
+  eq(attrs()['data-hana-focus'], 'native', 'the focus-ring switch did not reach the DOM');
+  env.toggle('焦点墨环');
+  eq(attrs()['data-hana-focus'], 'accent', 'the focus-ring switch did not toggle back');
 
   /* Out of range / unparseable must fall back, never write a broken value. */
   for (const bogus of ['999', '-5', 'abc', '']) {

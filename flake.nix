@@ -82,6 +82,8 @@
         node tools/derive-surfaces.mjs --check
         node tools/derive-ink-ramp.mjs --check
         node tools/derive-wash.mjs --check
+        node tools/derive-glass.mjs --check
+        node tools/derive-focus.mjs --check
         node test/runtime.test.js
         node test/selftest.js
       '';

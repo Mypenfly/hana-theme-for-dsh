@@ -111,8 +111,6 @@ const ROLES = {
   '--dsw-alias-bg-skeleton': ['mirror', 'bg-layer-3', 'the same surface before content arrives'],
   '--dsw-alias-bg-multi-select': ['mirror', 'bg-layer-2', ''],
   '--dsw-alias-button-elevated-fill': ['mirror', 'bg-layer-1', 'a floating button sits on the raised sheet'],
-  '--dsw-alias-button-floating-fill': ['mirror', 'bg-layer-1', ''],
-  '--dsw-alias-button-tool-bar-fill': ['mirror', 'bg-layer-1', ''],
   '--dsw-specific-login-input': ['mirror', 'bg-layer-1', ''],
   /* Measured, not assumed: this one is equal to bg-layer-3 on 纸本 and 珊瑚 but to
      interactive-bg-hover-solid on 青夜 and 斑斓, so it is a surface in its own
@@ -145,9 +143,34 @@ const ROLES = {
   '--dsw-alias-button-contrast-fill': ['fill', 'asserted pair 17: label-primary-inverted on this fill'],
   '--dsw-alias-button-info-fill': ['fill', ''],
   '--dsw-alias-button-info-hover': ['fill', ''],
-  '--dsw-alias-button-floating-hover': ['fill', ''],
-  '--dsw-alias-button-tool-bar-hover': ['fill', ''],
   '--dsw-alias-button-ghost-active-fill': ['wash', 'translucent by construction'],
+
+  /* ── glass: a surface that floats over content ──────────────────────── *
+   *
+   * The reference spends `--bg-glass` -- the palette's paper at .92, or .94 in
+   * its two CONTRAST themes -- on the small chips that hover over content that
+   * scrolls underneath them, and NOWHERE else: every menu, popover, dropdown and
+   * context menu in all 11 of its source themes is an opaque `--bg-card`, which
+   * is why `--dsw-specific-menu` above stays a mirror.
+   *
+   * DSH has one token with that job in a live call site: `button-floating-fill`
+   * dresses the 回到底部 button in dsh-client-ui-chat, which is `position: sticky`
+   * over the message list. `button-tool-bar-fill` is the design system's own
+   * translucent surface (shipped as #54555780, i.e. 50%): its rule is in the
+   * shipped CSS of both dsh-web-frontend (`._toolbar_cfgyt_65`) and
+   * dsh-client-ui-primitives (`lib/Button.module.css`), but the class is applied
+   * to nothing -- in the whole web frontend bundle that hash occurs exactly once,
+   * in the class map export. This ledger scans CSS rather than usage, which is
+   * the conservative choice: a declared surface is one this theme must still
+   * supply correctly.
+   *
+   * The hover steps are glass too, not `fill`s: a chip does not stop being
+   * translucent when it is pointed at, it steps toward the ink (see
+   * tools/derive-glass.mjs for why the alpha cannot carry that step). */
+  '--dsw-alias-button-floating-fill': ['glass', 'the 回到底部 chip: sticky over the message list'],
+  '--dsw-alias-button-tool-bar-fill': ['glass', "the design system's translucent toolbar; no call site renders the variant"],
+  '--dsw-alias-button-floating-hover': ['glass', 'the 回到底部 chip, pointed at'],
+  '--dsw-alias-button-tool-bar-hover': ['glass', 'DSH ships .60 against the fill\'s .50 -- the same surface, one step on'],
 
   /* ── washes ─────────────────────────────────────────────────────────── */
   '--dsw-alias-interactive-bg-hover': ['wash', 'the 4% ink tint; #A4 uses it and points at what that costs'],

@@ -717,6 +717,92 @@ for (const { id: themeName, tokens } of PALETTES) {
   }
 }
 
+/* ── #36: the glass layer ─────────────────────────────────────────────────
+ *
+ * HanaAgent spends `--bg-glass` -- the palette's paper at .92, or .94 in its two
+ * CONTRAST themes -- on the small chips that hover over content that scrolls
+ * underneath them: a find box over prose, a diagnostics badge, a preview hint, a
+ * code-copy tooltip. Nowhere else, and that is measured: every menu, popover,
+ * dropdown and context menu in all 11 of its source themes is an opaque
+ * `--bg-card`, which is why the ledger leaves `--dsw-specific-menu` a mirror.
+ *
+ * DSH's version of the idea is a handful of tokens it ships translucent. This
+ * theme had flattened the whole glass family into opaque plates, which is
+ * invisible to review -- a hex and an rgba look equally deliberate -- and
+ * invisible at rest, because a plate only differs from the page when there is
+ * something behind it. So the SHAPE is asserted here and the values are bound by
+ * tools/derive-glass.mjs:
+ *
+ *   alpha   at or above 0.95 the surface is a plate again, and the reference never
+ *           goes past .94 (and only in a contrast variant). Alpha 0 is allowed:
+ *           it is the bottom of the ladder -- 0 -> glass -> opaque -- that
+ *           button-tool-bar-fill-invisible sits on.
+ *   paper   the opaque triple must BE one of this palette's own surfaces, or lie
+ *           on the segment from one of them toward its ink at no more than the
+ *           heaviest wash the reference declares (--overlay-strong .15 is the
+ *           ladder's top; .85 is only reached by a near-solid chip). A glass
+ *           chip that is a colour from nowhere would pass any alpha test; this is
+ *           what catches it.
+ */
+const GLASS_MAX_ALPHA = 0.95;
+const GLASS_INK_MAX = 0.85;
+const asRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const sameTriple = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 1);
+let glassAssertions = 0;
+for (const entry of SURFACE_LEDGER.entries) {
+  if (entry.role !== 'glass') continue;
+  for (const { id: themeName, tokens } of PALETTES) {
+    const value = surfaceLookup(tokens, entry.name);
+    if (value === undefined) continue;
+    glassAssertions += 1;
+    const m = /^rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)$/.exec(value);
+    if (!m) {
+      failures.push(
+        `#36 ${themeName}: ${entry.name} is ${value}, which carries no alpha. This is the glass family: ` +
+          'the translucency IS the design, and a hex here is a chip painted as a sticker. ' +
+          `(${entry.why})`,
+      );
+      continue;
+    }
+    const alpha = Number(m[4]);
+    if (!(alpha >= 0 && alpha <= GLASS_MAX_ALPHA)) {
+      failures.push(
+        `#36 ${themeName}: ${entry.name} has alpha ${alpha}, outside [0, ${GLASS_MAX_ALPHA}]. The ` +
+          'reference caps its glass at .94, and only in a contrast variant; from .95 up the chip stops ' +
+          `letting the page through at all. (${entry.why})`,
+      );
+    }
+    const rgb = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const surfaces = ['--dsw-alias-bg-base', '--dsw-alias-bg-layer-1']
+      .map((n) => tokens[n])
+      .filter((v) => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v));
+    const ink = tokens['--dsw-alias-label-primary'];
+    const onFamily = surfaces.some((surface) => {
+      const s = asRgb(surface);
+      if (sameTriple(rgb, s)) return true;
+      if (typeof ink !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(ink)) return false;
+      const k = asRgb(ink);
+      /* Solve for the mix factor on the channel with the most room, then require
+         every channel to agree -- so a colour merely NEAR the segment, or on the
+         far side of the ink, is rejected rather than rounded in. */
+      const spans = s.map((v, i) => k[i] - v);
+      let t = 0;
+      for (let i = 1; i < spans.length; i += 1) if (Math.abs(spans[i]) > Math.abs(spans[t])) t = i;
+      if (spans[t] === 0) return false;
+      const factor = (rgb[t] - s[t]) / spans[t];
+      if (!(factor > 0 && factor <= GLASS_INK_MAX)) return false;
+      return sameTriple(rgb, s.map((v, i) => v + spans[i] * factor));
+    });
+    if (!onFamily) {
+      failures.push(
+        `#36 ${themeName}: ${entry.name} is ${value}, whose opaque part is neither one of this palette's ` +
+          `surfaces (${surfaces.join(', ')}) nor a step from one toward its ink (${ink}). A glass chip is ` +
+          `this palette's paper, thinned -- not a colour of its own. (${entry.why})`,
+      );
+    }
+  }
+}
+
 /* ── report ─────────────────────────────────────────────────────────────── */
 
 if (process.argv.includes('--verbose')) {
@@ -750,7 +836,8 @@ const assertions =
   labelPairAssertions +
   hoverAssertions +
   elevationAssertions +
-  separationAssertions;
+  separationAssertions +
+  glassAssertions;
 if (failures.length) {
   console.error(`contrast: ${failures.length} FAILED of ${assertions} assertions\n`);
   for (const f of failures) console.error('  ✗ ' + f);
@@ -763,5 +850,6 @@ console.log(
     `+ 1 seal-pair + ${rampAssertions} ink-ramp shape + ${surfaceAssertions} surface ladder + ${planeTintAssertions} plane tint ` +
     `+ ${labelPairAssertions} inverted-label plate ` +
     `+ ${hoverAssertions} hover direction ` +
-    `+ ${elevationAssertions} elevation model + ${separationAssertions} recorded link/error separation)`,
+    `+ ${elevationAssertions} elevation model + ${separationAssertions} recorded link/error separation ` +
+    `+ ${glassAssertions} glass surface shape)`,
 );

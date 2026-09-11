@@ -50,7 +50,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node test/check.js && node test/tokens.test.js && node test/surfaces.test.js && node test/contrast.test.js && node tools/derive-shiki.mjs --check && node tools/derive-surfaces.mjs --check && node tools/derive-ink-ramp.mjs --check && node tools/scan-geometry.mjs --check && node tools/derive-wash.mjs --check && node test/runtime.test.js && node test/selftest.js",
+    "test": "node test/check.js && node test/tokens.test.js && node test/surfaces.test.js && node test/contrast.test.js && node tools/derive-shiki.mjs --check && node tools/derive-surfaces.mjs --check && node tools/derive-ink-ramp.mjs --check && node tools/scan-geometry.mjs --check && node tools/derive-wash.mjs --check && node tools/derive-glass.mjs --check && node tools/derive-focus.mjs --check && node test/runtime.test.js && node test/selftest.js",
     "check": "node test/check.js",
     "tokens": "node test/tokens.test.js",
     "surfaces": "node test/surfaces.test.js",
@@ -83,7 +83,13 @@
     "verify:seal": "node test/verify/seal-check.mjs",
     "verify:seal:shot": "node test/verify/seal-check.mjs --keep",
     "derive:wash": "node tools/derive-wash.mjs --list",
-    "wash:check": "node tools/derive-wash.mjs --check"
+    "wash:check": "node tools/derive-wash.mjs --check",
+    "derive:glass": "node tools/derive-glass.mjs --list",
+    "glass:check": "node tools/derive-glass.mjs --check",
+    "derive:focus": "node tools/derive-focus.mjs --list",
+    "focus:check": "node tools/derive-focus.mjs --check",
+    "verify:focus": "node test/verify/focus-check.mjs",
+    "verify:focus:shot": "node test/verify/focus-check.mjs --keep"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"
