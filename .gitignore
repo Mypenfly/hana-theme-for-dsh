@@ -39,3 +39,5 @@ test/verify/probe.png
 .verify-profile/
 test/verify/surface-probe.html
 test/verify/surface-probe.png
+test/verify/seal-probe-soft.png
+test/verify/seal-probe-seal.png

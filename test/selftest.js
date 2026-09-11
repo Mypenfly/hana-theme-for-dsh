@@ -288,6 +288,52 @@ const MUTATIONS = [
       '      "  border-radius: 6px;",\n',
   },
   {
+    id: 'geometry-ledger-truncated',
+    why: 'makes the committed geometry ledger claim more sites than it carries. Every reader of that ledger gets easier when it shrinks — the seal clamp\'s cost argument ("the loss is one image site, not a family") rests entirely on the counts in this file, and a ledger that lost rows would keep every radius assertion green',
+    suite: 'check',
+    file: 'test/geometry-sites.json',
+    marker: 'against a recorded',
+    find: '"sites": 256',
+    replace: '"sites": 9999',
+  },
+  {
+    id: 'seal-clamp-loses-specificity',
+    why: 'drops the (0,3,1) selector from the 方角 clamp, leaving it at (0,2,1). DSH has three radius rules at (3,0) and the clamp then loses to exactly those three while every other surface squares — a failure that looks like nothing at all, because 266 of 269 sites still work',
+    suite: 'check',
+    marker: 'does not carry the (0,3,1)',
+    /* A template literal, because the text being matched is itself a JS
+       concatenation expression in lib/client.js and carries both quote kinds.
+       The first attempt built it by string addition and produced a syntax error
+       in this file rather than a mutation. */
+    find: `      "body[" + BODY_ATTR + "][" + SHAPE_ATTR + "='seal'] *[class],",
+`,
+    replace: '',
+  },
+  {
+    id: 'seal-corner-shape-dropped',
+    why: 'removes lever L1, the only app-wide geometry control DSH exposes. The radius clamp then squares corners that DSH renders with a superellipse SOFTER than a circle, which is the opposite of 方 — and nothing else in the suite would notice, because every radius assertion still passes',
+    suite: 'check',
+    marker: 'does not set --dsw-corner-shape',
+    find: '      "  --dsw-corner-shape: round;",\n',
+    replace: '      "",\n',
+  },
+  {
+    id: 'seal-tier-out-of-band',
+    why: "moves the medium tier to 8px, past HanaAgent's own scale (sm 2 / md 3 / lg 4 / chat-surface 6). Theming by taste rather than by the reference is the exact drift this project keeps having to undo",
+    suite: 'check',
+    marker: 'exceed HanaAgent',
+    find: '      "  --hana-seal-radius: 3px;",\n',
+    replace: '      "  --hana-seal-radius: 8px;",\n',
+  },
+  {
+    id: 'hairline-back-to-1px',
+    why: "returns the artifact chip's edge to 1px. HanaAgent legislates --border-width: 0.5px as part of the same rule as the radius scale, so a 1px edge here is the theme's own line being the heaviest on screen. It is also the mutation that exposed a hole in the judgement: the edge is applied through var(), so a literal-px check never saw it and the mutation was NOT CAUGHT until the judgement learned to read the variable too",
+    suite: 'check',
+    marker: 'are not 0.5px',
+    find: '      "  --hana-chip-edge: 0.5px;",\n',
+    replace: '      "  --hana-chip-edge: 1px;",\n',
+  },
+  {
     id: 'wash-transcribed-as-a-literal',
     why: 'replaces the derived color-mix with the coral hex it happens to resolve to. The wash would still look right in 珊瑚 and be wrong in the other three palettes, and the value would have become a second, unmanaged copy of a colour — the drift this project refuses',
     suite: 'check',
@@ -353,7 +399,15 @@ for (const m of MUTATIONS) {
       /* The bundle travels through HANA_BUNDLE (both loaders honour it) and a
          generated data file through HANA_ALLOWLIST (test/tokens.test.js honours
          it). Either way the real file is never written. */
-      ...(target === BUNDLE ? { HANA_BUNDLE: file } : { HANA_ALLOWLIST: file }),
+      /* Route by what the file IS, not by "not the bundle". A generated data
+         file used to be assumed to be the allow-list, so a mutation aimed at the
+         geometry ledger was handed to a variable test/check.js never read and
+         the gate silently proved nothing. */
+      ...(target === BUNDLE
+        ? { HANA_BUNDLE: file }
+        : path.basename(target) === 'geometry-sites.json'
+          ? { HANA_GEOMETRY: file }
+          : { HANA_ALLOWLIST: file }),
     },
     /* A mutated bundle can run away rather than fail politely — removing the
        override-identity guard produces unbounded re-layering, which churns for

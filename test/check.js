@@ -639,6 +639,143 @@ for (const [hook, why] of [
   }
 }
 
+/* ── the 方角 clamp ──────────────────────────────────────────────────────
+ *
+ * HanaAgent treats geometry as a theme dimension: new-warm-paper.css:62-69
+ * overrides the global radius scale and its header names the rule
+ * 「极方圆角 + 0.5px hairline」 / 「controls are seals, 方」, applied to the whole app.
+ * DSH has no radius token at all -- 256 declarations, none reading a custom
+ * property, 254 of 256 keyed on a build hash (tools/scan-geometry.mjs) -- so the
+ * reference's one-token override has to become a global clamp.
+ *
+ * The clamp must win on SPECIFICITY, because judgement 1 forbids !important, and
+ * the arithmetic is the whole mechanism: DSH's radius selectors reach (3,0) on
+ * exactly three rules, so the universal needs (0,3,1). These judgements pin the
+ * parts that would fail silently -- a clamp that loses the cascade looks exactly
+ * like a clamp that was never written.
+ */
+const sealSel = "body[" + "data-hana-theme" + "][" + "data-hana-shape" + "='seal']";
+check(
+  css.includes("--dsw-corner-shape:"),
+  'the seal block does not set --dsw-corner-shape. That is lever L1: DSH drives corner ' +
+    'shape from one property applied to every element, and superellipse(1.5) is softer ' +
+    'than a circle, so without it the clamp alone cannot reach 方.',
+);
+check(
+  css.includes(sealSel + " *[class]"),
+  'the seal clamp does not carry the (0,3,1) selector "' + sealSel + ' *[class]". DSH has ' +
+    'three radius rules at (3,0); at (0,2,1) the clamp loses to them and those surfaces keep ' +
+    'their shipped radius while everything around them squares. Verified in a real engine by ' +
+    'test/verify/seal-check.mjs, which measures 3px at (0,1,0)/(0,2,0)/(0,3,0) in seal mode ' +
+    'and DSH\'s shipped 6/6/10px in soft mode.',
+);
+{
+  const tier = (prop) => {
+    const m = css.match(new RegExp("--" + prop + ":\\s*(\\d+(?:\\.\\d+)?)px"));
+    return m ? Number(m[1]) : null;
+  };
+  const t = {
+    sm: tier("hana-seal-radius-sm"),
+    md: tier("hana-seal-radius"),
+    lg: tier("hana-seal-radius-lg"),
+    input: tier("hana-seal-radius-input"),
+  };
+  check(
+    t.sm !== null && t.md !== null && t.lg !== null && t.input !== null,
+    'the seal tiers are not all declared: ' + JSON.stringify(t),
+  );
+  if (t.sm !== null && t.md !== null && t.lg !== null && t.input !== null) {
+    check(
+      t.sm <= t.md && t.md <= t.lg && t.lg < t.input,
+      'the seal tiers are not ordered sm <= md <= lg < input: ' + JSON.stringify(t),
+    );
+    /* The reference's own numbers, so this is a port and not a taste: --radius-sm 2,
+       --radius-md/--radius-card 3, --radius-lg/--radius-chat-card 4, and
+       --radius-chat-surface 6 for the composer -- the one softness HanaAgent keeps. */
+    check(
+      t.md <= 3 && t.lg <= 4 && t.input <= 6,
+      'the seal tiers exceed HanaAgent\'s scale (sm 2 / md 3 / lg 4 / chat-surface 6): ' +
+        JSON.stringify(t),
+    );
+  }
+}
+
+/* HanaAgent legislates --border-width: 0.5px as part of the same rule, and DSH
+   already draws most of its own hairlines at .5px. Where THIS theme declares a
+   hairline it must match, or the theme's own lines are the heaviest on screen. */
+{
+  const hanaHairlines = [...css.matchAll(/border(?:-(?:top|bottom|left|right))?:\s*(\d+(?:\.\d+)?)px solid/g)]
+    .map((m) => Number(m[1]))
+    .filter((n) => n < 2);
+  const heavy = [...css.matchAll(/border(?:-(?:top|bottom|left|right))?:\s*(\d+(?:\.\d+)?)px solid/g)]
+    .map((m) => Number(m[1]))
+    .filter((n) => n !== 0.5 && n !== 2);
+  check(
+    heavy.length === 0,
+    "the theme draws a border at " + JSON.stringify([...new Set(heavy)]) + "px. HanaAgent's rule is " +
+      "--border-width: 0.5px, and the only heavier stroke it sanctions is the 2px left rule it uses " +
+      'for blockquotes and callouts.',
+  );
+  check(hanaHairlines.length > 0, 'no sub-2px hairline found at all — did the borders get removed?');
+
+  /* And the borders written through a VARIABLE have to be checked too. The first
+     version of this judgement only looked at literal px values, so
+     `border: var(--hana-chip-edge) solid ...` walked straight past it: the
+     mutation that set --hana-chip-edge back to 1px was NOT CAUGHT. A rule that
+     reads the declarations but not what they resolve to is a rule that measures
+     the shape of the theme rather than the theme. */
+  const edgeProps = [...css.matchAll(/(--hana-[a-z-]*edge[a-z-]*):\s*(\d+(?:\.\d+)?)px/g)];
+  check(
+    edgeProps.length > 0,
+    'no --hana-*-edge variable found; the hairline width is no longer a named value',
+  );
+  const fatEdges = edgeProps.filter((m) => Number(m[2]) !== 0.5).map((m) => m[1] + ': ' + m[2] + 'px');
+  check(
+    fatEdges.length === 0,
+    'these edge variables are not 0.5px: ' + fatEdges.join(', ') +
+      ". HanaAgent's rule is --border-width: 0.5px, and a var() hides the value from any " +
+      'literal-only check.',
+  );
+}
+
+/* ── the geometry ledger, validated OFFLINE ─────────────────────────────
+ *
+ * tools/scan-geometry.mjs --check regenerates the ledger from the installed
+ * packages, so it belongs in `npm test` and NOT in the flake's check list: the
+ * nix build sandbox has no DSH profile and no desktop app, and a gate that fails
+ * there for environmental reasons is worse than one that is honestly scoped.
+ * test/surfaces.test.js is offline for the same reason, which is why
+ * scan-surface-roles --check is likewise absent from the flake.
+ *
+ * What CAN be checked offline is that the committed artifact is not corrupt or
+ * truncated -- the failure mode where a ledger loses half its rows and every
+ * assertion that reads it quietly gets easier.
+ */
+{
+  /* HANA_GEOMETRY, mirroring HANA_ALLOWLIST in test/tokens.test.js: the mutation
+     suite runs this file against a MUTATED copy, and without an override the
+     mutation would be invisible here and the gate would be decoration. */
+  const ledgerPath = process.env.HANA_GEOMETRY || path.join(__dirname, 'geometry-sites.json');
+  check(fs.existsSync(ledgerPath), 'test/geometry-sites.json is missing; run npm run geometry:scan');
+  if (fs.existsSync(ledgerPath)) {
+    const ledger = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
+    const entries = ledger.entries || [];
+    check(
+      entries.length === ledger.source.sites && entries.length > 200,
+      `the geometry ledger has ${entries.length} entries against a recorded ${ledger.source.sites}; ` +
+        'a truncated ledger makes every reader of it pass more easily',
+    );
+    const bad = entries.filter((e) => !e.pkg || !e.module || !e.value || typeof e.reachable !== 'boolean');
+    check(bad.length === 0, `${bad.length} geometry ledger entries are missing pkg/module/value/reachable`);
+    const circles = entries.filter((e) => /999px|50%|100px/.test(e.value)).length;
+    check(
+      circles > 0 && circles < entries.length / 2,
+      `the ledger reports ${circles} circle/pill sites out of ${entries.length}, which cannot be right ` +
+        'in either direction — the seal clamp\'s whole cost argument rests on this count',
+    );
+  }
+}
+
 /* ── report ─────────────────────────────────────────────────────────────── */
 
 if (failures.length) {
