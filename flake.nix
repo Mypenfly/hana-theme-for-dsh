@@ -81,6 +81,7 @@
         node tools/derive-shiki.mjs --check
         node tools/derive-surfaces.mjs --check
         node tools/derive-ink-ramp.mjs --check
+        node tools/derive-wash.mjs --check
         node test/runtime.test.js
         node test/selftest.js
       '';

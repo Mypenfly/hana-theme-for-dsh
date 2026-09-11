@@ -297,6 +297,22 @@ const MUTATIONS = [
     replace: '"sites": 9999',
   },
   {
+    id: 'wash-off-the-ladder',
+    why: "puts 斑斓's hover back to .04, which is the shipped state that made the CONTRAST palette the WEAKEST of the four — lighter than 青夜 at every step. Nothing else in the suite compares a palette's wash to its own reference theme, so the drift was invisible until the ladder was derived",
+    suite: 'wash',
+    marker: 'off the ladder',
+    find: '      "--dsw-alias-interactive-bg-hover": "rgba(255,255,255,0.07)",\n',
+    replace: '      "--dsw-alias-interactive-bg-hover": "rgba(255,255,255,0.04)",\n',
+  },
+  {
+    id: 'tip-no-longer-a-card',
+    why: 'restores the composer\'s old WELL (#E9E7DE in paper). HanaAgent fills its composer with --bg-card, and the three DSH consumers of this token are all cards, so a well here is a hole in the page — the exact defect the user reported as "输入框背景割裂"',
+    suite: 'ramp',
+    marker: 'has drifted apart',
+    find: '      "--dsw-specific-tip": "#FDF8EF",\n',
+    replace: '      "--dsw-specific-tip": "#E9E7DE",\n',
+  },
+  {
     id: 'seal-clamp-loses-specificity',
     why: 'drops the (0,3,1) selector from the 方角 clamp, leaving it at (0,2,1). DSH has three radius rules at (3,0) and the clamp then loses to exactly those three while every other surface squares — a failure that looks like nothing at all, because 266 of 269 sites still work',
     suite: 'check',
@@ -349,6 +365,9 @@ const SUITES = {
   tokens: path.join(__dirname, 'tokens.test.js'),
   ramp: path.join(__dirname, 'contrast.test.js'),
   check: path.join(__dirname, 'check.js'),
+  /* A suite may carry its own arguments, because a derivation tool proves itself
+     with --check rather than by being pointed at a file. */
+  wash: [path.join(ROOT, 'tools', 'derive-wash.mjs'), '--check'],
 };
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'hana-selftest-'));
 
@@ -363,7 +382,10 @@ const sourceOf = (rel) => {
 const suiteNames = [...new Set(MUTATIONS.map((m) => m.suite || 'runtime'))];
 console.log(
   `selftest: ${MUTATIONS.length} mutations against ` +
-    suiteNames.map((s) => 'test/' + path.basename(SUITES[s])).join(' + ') + '\n',
+    suiteNames.map((s) => {
+      const entry = SUITES[s];
+      return 'test/' + path.basename(Array.isArray(entry) ? entry[0] : entry);
+    }).join(' + ') + '\n',
 );
 
 let missed = 0;
@@ -392,7 +414,8 @@ for (const m of MUTATIONS) {
 
   const suite = SUITES[m.suite || 'runtime'];
   const started = Date.now();
-  const run = spawnSync(process.execPath, [suite], {
+  const argv = Array.isArray(suite) ? suite : [suite];
+  const run = spawnSync(process.execPath, argv, {
     encoding: 'utf8',
     env: {
       ...process.env,
@@ -463,9 +486,13 @@ for (const m of MUTATIONS) {
    failed" means nothing. */
 let baselineBad = 0;
 for (const name of suiteNames) {
-  const run = spawnSync(process.execPath, [SUITES[name]], { encoding: 'utf8', timeout: 30000 });
+  const entry = SUITES[name];
+  const run = spawnSync(process.execPath, Array.isArray(entry) ? entry : [entry], {
+    encoding: 'utf8',
+    timeout: 30000,
+  });
   if (run.status !== 0) {
-    console.error(`\nBASELINE FAILED — the unmutated sources do not pass test/${name}.test.js:`);
+    console.error(`\nBASELINE FAILED — the unmutated sources do not pass the "${name}" suite:`);
     console.error(`${run.stdout || ''}${run.stderr || ''}`);
     baselineBad += 1;
   }

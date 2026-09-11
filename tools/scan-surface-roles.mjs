@@ -91,7 +91,14 @@ const ROLES = {
   '--dsw-alias-markdown-code-block': ['plane', 'code block surface'],
   '--dsw-alias-markdown-inline-code': ['plane', 'inline code chip: measured 1.003 against the ground before this ledger existed'],
   '--dsw-alias-markdown-code-block-banner': ['plane', 'the code block header strip, which must read against the block itself'],
-  '--dsw-specific-tip': ['plane', 'callout / tip panel'],
+  /* The composer, the queue dock and the goal bar all paint this, and HanaAgent
+     fills all three of those with `--bg-card` -- measured in the reference's own
+     input/InputArea.module.css, which is `background: var(--bg-card)` in eight
+     rules. It is NOT the 便笺 surface: `--jian-note-bg` dresses the right-hand
+     note editor, which DSH has no slot for. An earlier revision painted this as a
+     WELL (#E9E7DE in paper), which is what made the composer read as a hole in the
+     page rather than a slip laid on it. */
+  '--dsw-specific-tip': ['mirror', 'bg-layer-1', 'the composer, the queue dock and the goal bar: one card surface, three names'],
 
   /* ── control surfaces ───────────────────────────────────────────────── */
   '--dsw-specific-input-major': ['plane', 'the composer input'],

@@ -598,10 +598,14 @@ const SEPARATION_PAIRS = [
   ['--dsw-alias-bg-layer-1', '--dsw-specific-bubble', 'an assistant bubble and a tool card are visible at the same moment'],
   ['--dsw-specific-bubble', '--dsw-alias-markdown-code-block', 'a code block inside a bubble'],
   ['--dsw-specific-bubble', '--dsw-alias-markdown-inline-code', 'an inline chip inside a bubble'],
-  ['--dsw-specific-bubble', '--dsw-specific-tip', 'a callout inside a bubble'],
   ['--dsw-alias-bg-layer-1', '--dsw-alias-markdown-code-block', 'a code block on a card'],
   ['--dsw-alias-bg-layer-1', '--dsw-alias-markdown-inline-code', 'an inline chip on a card'],
-  ['--dsw-alias-bg-layer-1', '--dsw-specific-tip', 'a callout on a card'],
+  /* --dsw-specific-tip is deliberately ABSENT from this list. It used to be paired
+     here as "a callout on a card" / "a callout inside a bubble", but its three real
+     consumers -- the composer, the queue dock and the goal bar -- are siblings of
+     the conversation on the page, not nested in a card or a bubble. They are a
+     MIRROR of bg-layer-1, because HanaAgent fills all three with --bg-card. The
+     pair was asserting a nesting that does not exist. */
 ];
 let surfaceAssertions = 0;
 let planeTintAssertions = 0;

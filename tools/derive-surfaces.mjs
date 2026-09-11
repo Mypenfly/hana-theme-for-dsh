@@ -98,10 +98,14 @@ const SEPARATION = [
   ['--dsw-alias-bg-layer-2', '--dsw-alias-bg-layer-3', 'beside', 'a well and a deeper well are on screen together'],
   ['--dsw-specific-bubble', '--dsw-alias-markdown-code-block', 'contains', ''],
   ['--dsw-specific-bubble', '--dsw-alias-markdown-inline-code', 'contains', ''],
-  ['--dsw-specific-bubble', '--dsw-specific-tip', 'contains', ''],
   ['--dsw-alias-bg-layer-1', '--dsw-alias-markdown-code-block', 'contains', ''],
   ['--dsw-alias-bg-layer-1', '--dsw-alias-markdown-inline-code', 'contains', ''],
-  ['--dsw-alias-bg-layer-1', '--dsw-specific-tip', 'contains', ''],
+  /* --dsw-specific-tip is deliberately ABSENT from this list. It used to be paired
+     here as "a callout on a card" / "a callout inside a bubble", but its three real
+     consumers -- the composer, the queue dock and the goal bar -- are siblings of
+     the conversation on the page, not nested in a card or a bubble. They are a
+     MIRROR of bg-layer-1, because HanaAgent fills all three with --bg-card. The
+     pair was asserting a nesting that does not exist. */
 ]
 
 const unreachable = []

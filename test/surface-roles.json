@@ -714,8 +714,9 @@
     },
     {
       "name": "--dsw-specific-tip",
-      "role": "plane",
-      "why": "callout / tip panel",
+      "role": "mirror",
+      "mirrorOf": "bg-layer-1",
+      "why": "the composer, the queue dock and the goal bar: one card surface, three names",
       "paintedAs": "background",
       "by": [
         "dsh-client-ui-conversation",
