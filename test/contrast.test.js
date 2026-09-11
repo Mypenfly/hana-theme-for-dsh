@@ -537,6 +537,101 @@ for (const { id: themeName, tokens } of PALETTES) {
   }
 }
 
+/* ── #33: the surface ladder ───────────────────────────────────────────────
+ *
+ * The review that produced this section was about tool calls, artifacts and the
+ * end-of-turn controls not being distinguishable from prose. The cause was one
+ * level down: measured against `bg-base`, 纸本's inline-code chip was at 1.003
+ * and its bubble at 1.012 — not "restrained", absent — while 珊瑚's ENTIRE
+ * ladder sat at 1.039-1.040, one flat level. The dark palettes were fine on
+ * distance and wrong on ties: 青夜 painted its bubble, code block and tip with
+ * the same colour, so a code block inside a bubble resolved to 1.000.
+ *
+ * The ledger behind this is generated from the ARTIFACT —
+ * `tools/scan-surface-roles.mjs` enumerates every colour token the installed UI
+ * actually paints with `background` — so a DSH upgrade that starts painting a
+ * new surface arrives as UNCLASSIFIED and fails rather than slipping in, and
+ * `npm test` runs that tool with `--check` so the ledger cannot go stale.
+ *
+ * Three properties, each with its own reason:
+ *
+ *   plane      reads at least `planeFloor` from the ground. The floor is not
+ *              invented: 纸本's layer-1 and layer-2 already sat at 1.065-1.070
+ *              and DID read as surfaces, so the line is "at least as separated
+ *              as the ones that work".
+ *   mirror     equals the token it names. A deliberate tie is a system; an
+ *              accidental one is a bug, and the only way to tell them apart is
+ *              to make the deliberate ones explicit.
+ *   separation two surfaces that share a screen differ from each other —
+ *              nesting (a code block in a bubble) or co-occurrence (an
+ *              assistant bubble beside a tool card).
+ */
+const fs = require('fs');
+const nodePath = require('path');
+const SURFACE_LEDGER = JSON.parse(
+  fs.readFileSync(nodePath.join(__dirname, 'surface-roles.json'), 'utf8'),
+);
+const PLANE_FLOOR = SURFACE_LEDGER.planeFloor;
+const SEPARATION_FLOOR = 1.02;
+const SEPARATION_PAIRS = [
+  ['--dsw-alias-bg-layer-1', '--dsw-specific-bubble', 'an assistant bubble and a tool card are visible at the same moment'],
+  ['--dsw-specific-bubble', '--dsw-alias-markdown-code-block', 'a code block inside a bubble'],
+  ['--dsw-specific-bubble', '--dsw-alias-markdown-inline-code', 'an inline chip inside a bubble'],
+  ['--dsw-specific-bubble', '--dsw-specific-tip', 'a callout inside a bubble'],
+  ['--dsw-alias-bg-layer-1', '--dsw-alias-markdown-code-block', 'a code block on a card'],
+  ['--dsw-alias-bg-layer-1', '--dsw-alias-markdown-inline-code', 'an inline chip on a card'],
+  ['--dsw-alias-bg-layer-1', '--dsw-specific-tip', 'a callout on a card'],
+];
+let surfaceAssertions = 0;
+const surfaceLookup = (tokens, name) =>
+  tokens[name] !== undefined ? tokens[name] : tokens[name.replace('--dsw-alias-', '--dsw-specific-')];
+
+for (const { id: themeName, tokens } of PALETTES) {
+  const ground = tokens['--dsw-alias-bg-base'];
+
+  for (const entry of SURFACE_LEDGER.entries) {
+    if (entry.role !== 'plane') continue;
+    const value = surfaceLookup(tokens, entry.name);
+    if (value === undefined) continue;
+    surfaceAssertions += 1;
+    const ratio = contrast(value, ground);
+    if (ratio < PLANE_FLOOR) {
+      failures.push(
+        `#33 ${themeName}: ${entry.name} is ${ratio.toFixed(3)}:1 against bg-base, below the ` +
+          `${PLANE_FLOOR} floor, so it reads as part of the ground rather than as a surface. (${entry.why})`,
+      );
+    }
+  }
+
+  for (const entry of SURFACE_LEDGER.entries) {
+    if (entry.role !== 'mirror') continue;
+    const mirror = surfaceLookup(tokens, entry.name);
+    const source = surfaceLookup(tokens, '--dsw-alias-' + entry.mirrorOf);
+    if (mirror === undefined || source === undefined) continue;
+    surfaceAssertions += 1;
+    if (mirror !== source) {
+      failures.push(
+        `#33 ${themeName}: ${entry.name} is ${mirror} but the surface it mirrors, ${entry.mirrorOf}, ` +
+          `is ${source} — a deliberate tie that has drifted apart`,
+      );
+    }
+  }
+
+  for (const [outer, inner, why] of SEPARATION_PAIRS) {
+    const a = surfaceLookup(tokens, outer);
+    const b = surfaceLookup(tokens, inner);
+    if (a === undefined || b === undefined) continue;
+    surfaceAssertions += 1;
+    const ratio = contrast(b, a);
+    if (ratio < SEPARATION_FLOOR) {
+      failures.push(
+        `#33 ${themeName}: ${inner} on ${outer} is ${ratio.toFixed(3)}:1, below ${SEPARATION_FLOOR} — ` +
+          `${why}, and they read as one surface`,
+      );
+    }
+  }
+}
+
 /* ── report ─────────────────────────────────────────────────────────────── */
 
 if (process.argv.includes('--verbose')) {
@@ -565,6 +660,7 @@ const assertions =
   syntaxAssertions +
   1 + // #28, the seal reuses an asserted pair
   rampAssertions +
+  surfaceAssertions +
   hoverAssertions +
   elevationAssertions +
   separationAssertions;
@@ -577,6 +673,7 @@ console.log(
   `contrast: ${assertions} assertions pass (${PAIRS.length} pairs x ${Object.keys(THEMES).length} palettes ` +
     `+ ${polarityAssertions} polarity + 2 link band + 1 soft-light neutrality + ${grainAssertions} grain-composite ` +
     `+ ${syntaxAssertions} syntax: ${SYNTAX_TOKENS.length} tokens x ${PALETTES.length} palettes + ${PALETTES.length} spread ` +
-    `+ 1 seal-pair + ${rampAssertions} ink-ramp shape + ${hoverAssertions} hover direction ` +
+    `+ 1 seal-pair + ${rampAssertions} ink-ramp shape + ${surfaceAssertions} surface ladder ` +
+    `+ ${hoverAssertions} hover direction ` +
     `+ ${elevationAssertions} elevation model + ${separationAssertions} recorded link/error separation)`,
 );

@@ -50,7 +50,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node test/check.js && node test/tokens.test.js && node test/surfaces.test.js && node test/contrast.test.js && node tools/derive-shiki.mjs --check && node tools/derive-ink-ramp.mjs --check && node test/runtime.test.js && node test/selftest.js",
+    "test": "node test/check.js && node test/tokens.test.js && node test/surfaces.test.js && node test/contrast.test.js && node tools/derive-shiki.mjs --check && node tools/derive-surfaces.mjs --check && node tools/derive-ink-ramp.mjs --check && node test/runtime.test.js && node test/selftest.js",
     "check": "node test/check.js",
     "tokens": "node test/tokens.test.js",
     "surfaces": "node test/surfaces.test.js",
@@ -71,7 +71,10 @@
     "allowlist:check": "node tools/refresh-allowlist.mjs --check",
     "surfaces:check": "node tools/scan-color-surfaces.mjs --check",
     "derive:ink": "node tools/derive-ink-ramp.mjs",
-    "ink:check": "node tools/derive-ink-ramp.mjs --check"
+    "ink:check": "node tools/derive-ink-ramp.mjs --check",
+    "derive:surfaces": "node tools/derive-surfaces.mjs",
+    "surfaces:roles": "node tools/scan-surface-roles.mjs",
+    "surfaces:roles:check": "node tools/scan-surface-roles.mjs --check"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"

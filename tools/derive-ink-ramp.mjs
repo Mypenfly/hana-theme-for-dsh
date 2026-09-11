@@ -213,6 +213,18 @@ const PALETTES = loadClient().exports.PALETTES
 const results = []
 let problems = 0
 
+/* The surfaces the contrast suite actually asserts tertiary ink against. The
+   anchor is not free to be merely "the shipped value": it has to clear AA on
+   EVERY surface it is painted on, and the DARKEST of them binds — for dark ink
+   on a light ground, contrast falls as the ground darkens.
+
+   That dependency became real the moment the surface ladder moved: 珊瑚's
+   `bg-layer-2` went from #FCF1E4 to #F9EEE2 to read as a well at all, and its
+   tertiary ink dropped from 4.72:1 to 4.43:1 on it — below AA. So the anchor is
+   now the shipped value RAISED until it clears AA everywhere, rather than an
+   input nobody re-checks. */
+const INK_SURFACES = ['--dsw-alias-bg-base', '--dsw-alias-bg-layer-2']
+
 for (const palette of PALETTES) {
   const T = palette.tokens
   const base = T['--dsw-alias-bg-base']
@@ -222,8 +234,29 @@ for (const palette of PALETTES) {
     caption: T['--dsw-alias-label-caption'],
     dimmed: T['--dsw-alias-label-dimmed'],
   }
+
+  /* Raise the anchor if any asserted surface cannot carry it. Solved on the same
+     primary-to-tertiary line as everything else, on the t<=1 side so it moves
+     toward the body ink; a palette whose anchor already clears every surface is
+     untouched. */
+  const line0 = lineFor(T)
+  let tertiary = shipped.tertiary
+  const raisedFor = []
+  for (const surface of INK_SURFACES) {
+    const bg = T[surface]
+    if (contrast(tertiary, bg) >= AA) continue
+    const needed = solve(line0, bg, AA)
+    if (needed === null) {
+      console.error(`${palette.id}: cannot clear AA on ${surface} along the ink line`)
+      problems += 1
+      continue
+    }
+    tertiary = needed
+    raisedFor.push(`${surface.replace('--dsw-alias-', '')} (was ${contrast(shipped.tertiary, bg).toFixed(2)}:1)`)
+  }
+
   const cPrimary = contrast(T['--dsw-alias-label-primary'], base)
-  const cTertiary = contrast(shipped.tertiary, base)
+  const cTertiary = contrast(tertiary, base)
   const f = Math.sqrt(cTertiary / cPrimary)
 
   const line = lineFor(T)
@@ -231,7 +264,7 @@ for (const palette of PALETTES) {
   for (const [name, spec] of RAMP) {
     const current = T[name]
     if (spec.anchor) {
-      want[name] = current
+      want[name] = name === '--dsw-alias-label-tertiary' ? tertiary : current
       continue
     }
     const target = cPrimary * f ** spec.power
@@ -244,7 +277,7 @@ for (const palette of PALETTES) {
     want[name] = hex
   }
 
-  results.push({ palette, base, shipped, cPrimary, cTertiary, f, want })
+  results.push({ palette, base, shipped, cPrimary, cTertiary, f, want, tertiary, raisedFor })
 }
 
 /* ── report ─────────────────────────────────────────────────────────────── */
@@ -252,19 +285,21 @@ for (const palette of PALETTES) {
 const pad = (s, n) => String(s).padEnd(n)
 const f2 = (n) => n.toFixed(2)
 
-console.log('INK RAMP DERIVATION')
-console.log('f = sqrt(t / p);  secondary = p*f,  caption = p*f^2.5,  dimmed = p*f^3')
-console.log('primary and tertiary are the anchors and are left untouched\n')
+const QUIET = process.argv.includes('--json')
+const say = (...a) => { if (!QUIET) console.log(...a) }
+say('INK RAMP DERIVATION')
+say('f = sqrt(t / p);  secondary = p*f,  caption = p*f^2.5,  dimmed = p*f^3')
+say('primary and tertiary are the anchors and are left untouched\n')
 
 let mismatch = 0
 for (const r of results) {
-  console.log('='.repeat(78))
-  console.log(`${r.palette.id}   base ${r.base}`)
-  console.log(
+  say('='.repeat(78))
+  say(`${r.palette.id}   base ${r.base}`)
+  say(
     `  primary ${f2(r.cPrimary)}:1   f ${r.f.toFixed(4)}   ` +
       `tertiary ${f2(r.cTertiary)}:1` + (r.cTertiary < AA * TIGHT ? '   <- TIGHT: within 5% of the AA floor' : ''),
   )
-  console.log('  ' + pad('stop', 24) + pad('shipped', 10) + pad('derived', 10) + pad('ratio', 9) + 'step')
+  say('  ' + pad('stop', 24) + pad('shipped', 10) + pad('derived', 10) + pad('ratio', 9) + 'step')
   let prev = null
   for (const [name, spec] of RAMP) {
     const key = name.replace('--dsw-alias-label-', '')
@@ -274,17 +309,20 @@ for (const r of results) {
     const step = prev === null ? '' : (c / prev).toFixed(3)
     prev = c
     const was = r.shipped[key] || r.palette.tokens[name]
-    const mark = spec.anchor
+    const mark = name === '--dsw-alias-label-primary'
       ? '  (anchor)'
       : was && was.toLowerCase() !== hex.toLowerCase() ? '  <- changes' : ''
-    if (!spec.anchor && was && was.toLowerCase() !== hex.toLowerCase()) mismatch += 1
-    console.log('  ' + pad(key, 24) + pad(was || '(new)', 10) + pad(hex, 10) + pad(f2(c), 9) + step + mark)
+    /* Only  is genuinely fixed now: the tertiary anchor is DERIVED,
+       raised when a surface cannot carry it, so it must count as a value the
+       check re-derives rather than one it takes on trust. */
+    if (name !== '--dsw-alias-label-primary' && was && was.toLowerCase() !== hex.toLowerCase()) mismatch += 1
+    say('  ' + pad(key, 24) + pad(was || '(new)', 10) + pad(hex, 10) + pad(f2(c), 9) + step + mark)
   }
   const caps = RAMP.map(([n]) => contrast(r.want[n], r.base))
   const steps = caps.slice(1).map((c, i) => c / caps[i])
   const geo = Math.sqrt(caps[0] * caps[2])
-  console.log('  ' + pad('steps', 24) + steps.map((s) => s.toFixed(3)).join('  '))
-  console.log(
+  say('  ' + pad('steps', 24) + steps.map((s) => s.toFixed(3)).join('  '))
+  say(
     '  ' + pad('geometric check', 24) + `secondary^2 / (primary*tertiary) = ` +
       (caps[1] ** 2 / (caps[0] * caps[2])).toFixed(4) + '  (1.0000 = exactly even)',
   )
@@ -301,6 +339,29 @@ for (const r of results) {
       mirrors.push(`${r.palette.id}: ${mirror} is ${a}, but ${source} derives to ${b}`)
     }
   }
+}
+
+if (process.argv.includes('--json')) {
+  const out = {}
+  for (const r of results) {
+    const changes = {}
+    for (const [name] of RAMP) {
+      if (r.want[name] === undefined) continue
+      const was = r.palette.tokens[name]
+      if (was.toLowerCase() === r.want[name].toLowerCase()) continue
+      changes[name] = { from: was, to: r.want[name] }
+    }
+    for (const [mirror, source] of MIRRORS) {
+      const to = r.want[source]
+      const was = r.palette.tokens[mirror]
+      if (was === undefined || to === undefined) continue
+      if (was.toLowerCase() === to.toLowerCase()) continue
+      changes[mirror] = { from: was, to }
+    }
+    if (Object.keys(changes).length) out[r.palette.id] = changes
+  }
+  console.log(JSON.stringify(out, null, 2))
+  process.exit(0)
 }
 
 if (process.argv.includes('--check')) {

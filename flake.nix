@@ -79,6 +79,7 @@
         node test/surfaces.test.js
         node test/contrast.test.js
         node tools/derive-shiki.mjs --check
+        node tools/derive-surfaces.mjs --check
         node tools/derive-ink-ramp.mjs --check
         node test/runtime.test.js
         node test/selftest.js
@@ -152,6 +153,7 @@
                 npm run refresh:surfaces    re-scan DSH for colour-carrying custom properties
                 npm run derive:shiki        re-derive the syntax-highlighting palettes
                 npm run derive:ink          re-derive the ink ramp from its two anchors
+                npm run derive:surfaces     re-derive the surface ladder from its floors
                 npm run probe               print the Phase 0 DOM probe script
 
                 dsh plugin --profile web add "link:$PWD"    install (desktop is app-owned)

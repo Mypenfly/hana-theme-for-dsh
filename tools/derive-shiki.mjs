@@ -205,6 +205,25 @@ for (const palette of PALETTES) {
 
 /* ── report ───────────────────────────────────────────────────────────── */
 
+if (process.argv.includes('--json')) {
+  /* Machine-readable, so a change to the code SURFACE — which happens whenever
+     the surface ladder moves — can be applied to all 33 syntax values
+     mechanically instead of transcribed. Hand-copying a "derived" table is how
+     it stops being derived. */
+  const shippedAll = loadClient().exports.SHIKI || {};
+  const out = {};
+  for (const [id, tokens] of Object.entries(result)) {
+    const changes = {};
+    for (const [name, value] of Object.entries(tokens)) {
+      const shipped = (shippedAll[id] || {})[name];
+      if (shipped !== value) changes[name] = { from: shipped, to: value };
+    }
+    if (Object.keys(changes).length) out[id] = changes;
+  }
+  console.log(JSON.stringify(out, null, 2));
+  process.exit(0);
+}
+
 /* --check closes the loop the other way round from the other gates: instead of
    asking "is this artifact fresh?", it asks "are the numbers in lib/client.js
    still the ones this derivation produces?". Without it, "derived, not

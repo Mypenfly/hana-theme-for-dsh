@@ -194,7 +194,7 @@ const MUTATIONS = [
     why: 'restores 珊瑚\'s shipped secondary, which sat 60% off the even step between its two anchors — the palette read with a visibly different hierarchy from its siblings',
     suite: 'ramp',
     marker: 'is not geometric',
-    find: '      "--dsw-alias-label-secondary": "#405062",\n',
+    find: '      "--dsw-alias-label-secondary": "#3E5061",\n',
     replace: '      "--dsw-alias-label-secondary": "#314153",\n',
   },
   {
@@ -222,6 +222,26 @@ const MUTATIONS = [
     find: '    "writesEveryComposedToken": true,',
     replace: '    "writesEveryComposedToken": false,',
   },
+  /* ── the surface ladder (test/contrast.test.js #33) ───────────────────────
+   * Both restore states this project actually shipped, and each targets a
+   * different half of the gate: the distance rule, and the deliberate ties that
+   * the distance rule alone would happily break. */
+  {
+    id: 'surface-ladder-flattened',
+    why: 'restores 纸本\'s shipped inline-code chip, which sat 1.003:1 against the ground — not "subtle", absent. A whole class of surface was invisible and nothing measured it',
+    suite: 'ramp',
+    marker: 'below the 1.06 floor',
+    find: '      "--dsw-alias-markdown-inline-code": "#E9E7DE",\n',
+    replace: '      "--dsw-alias-markdown-inline-code": "#F3EFE6",\n',
+  },
+  {
+    id: 'mirror-drifted',
+    why: 'moves the modal overlay off the raised card it is a second name for, so an overlay and a card stop being the same surface — the drift the mirror assertions exist to catch, and which the surface derivation produced once before they did',
+    suite: 'ramp',
+    marker: 'has drifted apart',
+    find: '      "--dsw-alias-bg-overlay": "#FBF7EE",\n',
+    replace: '      "--dsw-alias-bg-overlay": "#F7F2E8",\n',
+  },
 ];
 
 const verbose = process.argv.includes('--verbose');
@@ -243,7 +263,7 @@ const sourceOf = (rel) => {
 const suiteNames = [...new Set(MUTATIONS.map((m) => m.suite || 'runtime'))];
 console.log(
   `selftest: ${MUTATIONS.length} mutations against ` +
-    suiteNames.map((s) => 'test/' + s + '.test.js').join(' + ') + '\n',
+    suiteNames.map((s) => 'test/' + path.basename(SUITES[s])).join(' + ') + '\n',
 );
 
 let missed = 0;
