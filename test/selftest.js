@@ -133,6 +133,14 @@ const MUTATIONS = [
     replace: '        clearShiki();',
   },
   {
+    id: 'grain-off-by-default-again',
+    why: 'flips the paper texture back to off, which is what the theme shipped before the second aesthetic review asked for the paper to read as paper — the grain is the layer that carries it, and it was off',
+    section: '11 —',
+    marker: 'not on by default',
+    find: '      paperTexture: "1",',
+    replace: '      paperTexture: "0",',
+  },
+  {
     id: 'contributes-without-a-claimed-palette',
     why: 'breaks the negative promise the architecture exists for: something is styled even though no hana palette was ever selected — "I installed a theme and it repainted my UI"',
     section: '1 —',

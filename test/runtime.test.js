@@ -428,7 +428,10 @@ section('11 — the ornament settings reach the DOM');
      agree or the first paint jumps when the scope binds (check.js asserts they
      agree in source; here is the value that actually lands). */
   eq(attrs()['data-hana-shape'], 'soft', 'the default corner setting is not soft');
-  eq(attrs()['data-hana-texture'], 'off', 'paper texture is not off by default');
+  /* ON by default since the second aesthetic review: the user asked for the paper
+     to read as paper, and the grain is the layer that carries it. The switch stays
+     for anyone who wants the flat colour back. */
+  eq(attrs()['data-hana-texture'], 'on', 'paper texture is not on by default');
   eq(classes(), ['hana-serif'], 'serif reading type is not on by default');
   eq(inline()['--hana-serif-scale'], '1.15', 'the default reading-size factor is not the stylesheet literal');
   eq(inline()['--hana-grain-opacity'], '0.32', 'the default grain intensity is wrong');
@@ -440,7 +443,7 @@ section('11 — the ornament settings reach the DOM');
   ok(!classes().includes('hana-serif'), 'switching serif off left the class in place');
 
   env.toggle('纸质纹理');
-  eq(attrs()['data-hana-texture'], 'on', 'the paper-texture switch did not reach the DOM');
+  eq(attrs()['data-hana-texture'], 'off', 'the paper-texture switch did not reach the DOM');
   env.setRange('纹理强度', 48);
   eq(inline()['--hana-grain-opacity'], '0.48', 'the grain slider did not reach the DOM');
 

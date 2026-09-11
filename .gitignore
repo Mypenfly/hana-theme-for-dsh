@@ -37,3 +37,5 @@ test/verify/probe.png
 # A throwaway Firefox profile, created in-tree so headless rendering works in a
 # sandbox with no writable HOME.
 .verify-profile/
+test/verify/surface-probe.html
+test/verify/surface-probe.png

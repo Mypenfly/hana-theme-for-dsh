@@ -74,7 +74,9 @@
     "ink:check": "node tools/derive-ink-ramp.mjs --check",
     "derive:surfaces": "node tools/derive-surfaces.mjs",
     "surfaces:roles": "node tools/scan-surface-roles.mjs",
-    "surfaces:roles:check": "node tools/scan-surface-roles.mjs --check"
+    "surfaces:roles:check": "node tools/scan-surface-roles.mjs --check",
+    "verify:surfaces": "node test/verify/surface-check.mjs",
+    "verify:surfaces:shot": "node test/verify/surface-check.mjs --keep"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"
