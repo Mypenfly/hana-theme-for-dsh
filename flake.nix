@@ -67,13 +67,17 @@
       #
       # Every command here is offline by construction. `derive-shiki.mjs --check`
       # qualifies because the repainted source palette is part of the
-      # reproduction, not read out of an installed harness.
+      # reproduction, not read out of an installed harness. `selftest.js` needs
+      # to spawn a child process; if that is ever forbidden it exits 2 with a
+      # message saying so, rather than reporting a mutation as caught.
       checkCommands = ''
         node test/check.js
         node test/tokens.test.js
         node test/surfaces.test.js
         node test/contrast.test.js
         node tools/derive-shiki.mjs --check
+        node test/runtime.test.js
+        node test/selftest.js
       '';
     in
     {

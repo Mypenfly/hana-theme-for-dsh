@@ -155,7 +155,9 @@ The only toolchain needed is Node and pnpm, and there is **no build step** — `
 
 ```bash
 nix develop                  # Node 24 + pnpm + jq, pinned to the host's nixpkgs
-npm test                     # static checks + allow-list + colour-surface ledger + contrast
+npm test                     # static + allow-list + surface ledger + contrast + runtime + selftest
+npm run runtime              # just the runtime suite (the plugin is executed)
+npm run selftest:verbose     # mutations: which section catches which bug
 npm run refresh:allowlist    # re-derive the token allow-list from the installed DSH
 npm run allowlist:all        # every DSH install found, and its token count
 npm run refresh:surfaces     # re-scan every colour-carrying custom property in the DSH
@@ -169,7 +171,7 @@ npm run probe                # print the Phase 0 DOM probe for the DevTools cons
 ```
 lib/index.js     Host half — the durable settings namespace
 lib/client.js    Client half — palettes, syntax palettes, stylesheet, settings panel (the artifact)
-test/            the gates
+test/            the gates (including runtime.test.js and selftest.js)
 test/verify/     in-engine verification scaffolding (not a gate — see below)
 tools/           refresh-allowlist.mjs / scan-color-surfaces.mjs / derive-shiki.mjs
 docs/            the research and design documents this implementation follows
@@ -235,7 +237,17 @@ The reverse direction matters just as much: **a surface claimed as `theme` must 
 
 **`test/tokens.test.js`** — every colour token name must appear in an allow-list generated from the installed harness, all four palettes must cover the same names, the eleven syntax names must match the harness's declared set exactly (also generated, by `refresh-allowlist.mjs`), and `--shiki-background` must equal the `--dsw-alias-markdown-code-block` it is painted on.
 
-The suite has earned its keep. It has caught a load-time crash, three dead tokens in this theme's own palette, a dead `--hana-*` token, a packaging gap that only a registry install would have hit, after the settings-persistence bug it now refuses to build if the settings scope is bound with a bare string, and now **an entire colour channel**.
+**`test/runtime.test.js` — 82 assertions, with the plugin actually EXECUTED.** Every suite above reads source text or shipped tables; this one reads behaviour. That distinction matters more here than it usually would, because "the theme fails silently" is a runtime property: a token the presenter wipes, a listener that re-enters, a deferred re-apply that loses a race, a write that lands nowhere. None of those are visible in the text of a file, and the one severe bug in this project's history (§5.7, the four-layer settings-persistence chain) was made entirely of them. The lesson that bug produced was *"① explicit contract + ② visible durability state + ③ a judgement"* — ① and ② shipped long ago; **③ never did.**
+
+It guards eleven behaviours: contributing nothing until a palette is claimed; complete reversibility on unload; the syntax palette applied, following the palette rather than the colorScheme, replaced not merged on switch, and cleared on detach; the override layer rebuilt only when the choice changes; the §5.7 regression itself; the deferred re-apply asserted as an *ordering* guarantee; the settings write gate plus its visible warning; the panel rendering with controls wired to real rows; the master switch; a dark palette not being swapped for its light partner; and the four ornament switches, including that an out-of-range value falls back rather than writing a broken font shorthand.
+
+**`test/selftest.js` — the mutation proof that the above is not vacuous.** A test that passes for the wrong reason looks exactly like one that passes for the right reason, and nothing in a green run tells them apart. This repo has already been on the wrong side of that: 91 contrast assertions were passing while an entire colour channel was unreadable.
+
+So it takes the **real** bundle, injects a bug that either happened here or is a plausible next one, runs the suite in a **fresh process** against the mutated copy, and requires it to fail. Two things keep it honest: the injection is itself verified (a stale anchor is reported `INAPPLICABLE` and **counted as a failure**, because a mutation that silently did not apply would "pass" while proving nothing), and the expected *section* must appear in the output — "something failed" would also be satisfied by an unrelated crash. Eleven mutations, eleven behaviours, all caught, plus a baseline asserting the unmutated bundle passes.
+
+> An honest note: B1 found no new bug. The real bundle was already correct on all eleven behaviours. Its value is turning "no bug" from a comment into **a conclusion with evidence, and then locking it** — which is worth as much as a fix, but reads less dramatically.
+
+The suite has earned its keep. It has caught a load-time crash, three dead tokens in this theme's own palette, a dead `--hana-*` token, a packaging gap that only a registry install would have hit, after the settings-persistence bug it now refuses to build if the settings scope is bound with a bare string, **an entire colour channel**, and a runtime sandbox that would have passed every assertion while testing nothing — `test/load-client.js` has no `document` at all, and that is the first thing `apply()` tests, so every visual path returned early.
 
 ## Compatibility
 

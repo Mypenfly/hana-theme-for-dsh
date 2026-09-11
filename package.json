@@ -50,11 +50,14 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node test/check.js && node test/tokens.test.js && node test/surfaces.test.js && node test/contrast.test.js && node tools/derive-shiki.mjs --check",
+    "test": "node test/check.js && node test/tokens.test.js && node test/surfaces.test.js && node test/contrast.test.js && node tools/derive-shiki.mjs --check && node test/runtime.test.js && node test/selftest.js",
     "check": "node test/check.js",
     "tokens": "node test/tokens.test.js",
     "surfaces": "node test/surfaces.test.js",
     "contrast": "node test/contrast.test.js",
+    "runtime": "node test/runtime.test.js",
+    "selftest": "node test/selftest.js",
+    "selftest:verbose": "node test/selftest.js --verbose",
     "refresh:allowlist": "node tools/refresh-allowlist.mjs",
     "allowlist:all": "node tools/refresh-allowlist.mjs --all",
     "refresh:surfaces": "node tools/scan-color-surfaces.mjs",
