@@ -470,6 +470,48 @@ const MUTATIONS = [
     replace: '      "body[" + BODY_ATTR + "][" + TEXTURE_ATTR + "=\'on\']::after {",\n',
   },
   {
+    id: 'tracking-register-data-tracks-too',
+    why: "gives the DATA cells the label tracking, collapsing the register's pair into one value. It changes almost nothing on screen today -- which is the point: the pair exists so that 'data is not tracked' is an invariant rather than a sentence, and a mutation has to be able to break it",
+    suite: 'check',
+    marker: 'do not take the explicit zero',
+    find: "      \"body[\" + BODY_ATTR + \"] [data-chat-flow-kind='assistant-step'] td {\",\n      \"  letter-spacing: var(--hana-track-data);\",\n",
+    replace: "      \"body[\" + BODY_ATTR + \"] [data-chat-flow-kind='assistant-step'] td {\",\n      \"  letter-spacing: var(--hana-track-label);\",\n",
+  },
+  {
+    id: 'link-rule-back-to-text-decoration',
+    why: "returns to the treatment this theme shipped, which the recorded reason defended on grounds that turned out to be a category error: colouring a border that already exists does not narrow the hit area. The mutation is worth keeping because that wrong reason is still in the design document's history, and this is what makes the correction stick",
+    suite: 'check',
+    marker: 'does not clear text-decoration',
+    find: '      "  text-decoration: none;",\n      "  border-bottom: 1px solid var(--hana-link-rule);",\n',
+    replace:
+      '      "  text-decoration: underline;",\n' +
+      '      "  text-decoration-color: var(--hana-link-rule);",\n',
+  },
+  {
+    id: 'link-hover-keeps-the-harness-underline',
+    why: "drops the hover's text-decoration: none. The harness's own hover is `text-decoration: underline`, so a link would then draw the resting border AND the hover underline -- two lines under one word, which reads as a bug and is invisible until somebody hovers",
+    suite: 'check',
+    marker: 'hover does not clear text-decoration',
+    find: '      "  text-decoration: none;",\n      "  border-bottom-color: var(--hana-link-rule-hover);",\n',
+    replace: '      "  border-bottom-color: var(--hana-link-rule-hover);",\n',
+  },
+  {
+    id: 'link-rule-writes-the-border-shorthand',
+    why: "swaps border-bottom for the `border` shorthand -- the one-character tidier edit. It resets all four sides, including the three zero-alpha borders the harness uses as the anchor's hit area, so the click target really does shrink. This is the mistake the previous comment claimed it was avoiding while doing something else entirely",
+    suite: 'check',
+    marker: 'writes the `border` SHORTHAND',
+    find: '      "  border-bottom: 1px solid var(--hana-link-rule);",\n',
+    replace: '      "  border: 1px solid var(--hana-link-rule);",\n',
+  },
+  {
+    id: 'link-rule-faded-to-nothing',
+    why: "drops the rule's alpha from 35% to 4%. Every text assertion in the suite stays green -- the link ink is unchanged -- and the second channel that #32 leans on is gone: the underline stops being perceptible, leaving two indistinguishable inks and nothing else",
+    suite: 'ramp',
+    marker: 'below the 1.4 floor',
+    find: 'in srgb, var(--dsw-alias-state-business-primary) 35%, transparent);\",\n      \"  --hana-link-rule-hover',
+    replace: 'in srgb, var(--dsw-alias-state-business-primary) 4%, transparent);\",\n      \"  --hana-link-rule-hover',
+  },
+  {
     id: 'palette-keyed-rule-names-a-ghost-palette',
     why: "misspells the palette attribute value ('corral'). The first version of judgement 8 tested the literal prefix `body[data-hana-theme]`, which would have waved this through while rejecting a correct palette-keyed rule — the rule never matches, and 珊瑚 silently falls back to the generic ring, i.e. to the coral it was keyed there to avoid",
     suite: 'check',

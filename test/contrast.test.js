@@ -13,7 +13,7 @@
  */
 
 const { loadClient } = require('./load-client');
-const { parse, luminance, contrast, oklab, deltaE } = require('./color');
+const { parse, composite, luminance, contrast, oklab, deltaE } = require('./color');
 
 const { exports: client } = loadClient();
 /* Iterate the palettes the plugin actually registers, so adding one to
@@ -803,6 +803,66 @@ for (const entry of SURFACE_LEDGER.entries) {
   }
 }
 
+/* ── #37: the link rule is a second, non-chromatic channel ────────────────
+ *
+ * #32 records a collision that cannot be fixed by moving a hue: 珊瑚's link ink
+ * and its error ink are delta-E 0.019 apart, and 青夜's are 0.030 -- the same
+ * colour to a reader. That number is recorded rather than thresholded, and this
+ * assertion does not pretend to repair it.
+ *
+ * What HanaAgent's link treatment adds is a SECOND channel: the anchor carries a
+ * rule under it (`border-bottom: 1px solid rgba(var(--link-rgb), 0.35)`), and
+ * error text never does. So a reader who cannot separate the two inks can still
+ * separate "has a rule" from "has none" -- which is WCAG 1.4.1's actual
+ * requirement, that colour not be the only means of conveying something.
+ *
+ * What is MEASURED here is the rule's visibility, because that is the part that
+ * can silently stop working: an alpha edited down to near nothing leaves every
+ * text assertion in this suite green and the channel gone. The floor is set well
+ * under the lowest measured value (1.567) and well above an alpha collapse.
+ */
+/* The alpha is READ FROM THE SHIPPED STYLESHEET, not restated here. The first
+   version hard-coded 0.35 and every mutation against the real declaration was
+   invisible to it -- the gate and the artifact were two copies of one fact,
+   which is the failure this whole file exists to prevent. */
+const LINK_RULE_DECL = /--hana-link-rule:\s*color-mix\(in srgb,\s*var\(--dsw-alias-state-business-primary\)\s*([0-9.]+)%,\s*transparent\)/
+  .exec(client.CSS);
+if (!LINK_RULE_DECL) {
+  failures.push(
+    '#37 cannot find `--hana-link-rule: color-mix(in srgb, var(--dsw-alias-state-business-primary) N%, ' +
+      'transparent)` in the shipped stylesheet, so it cannot measure the link rule at all. If the rule ' +
+      'changed shape, teach this assertion the new one rather than deleting it.',
+  );
+}
+const LINK_RULE_ALPHA = LINK_RULE_DECL ? Number(LINK_RULE_DECL[1]) / 100 : null;
+const LINK_RULE_FLOOR = 1.4;
+let linkRuleAssertions = 0;
+for (const { id: themeName, tokens } of PALETTES) {
+  const ink = tokens['--dsw-alias-state-business-primary'];
+  const ground = tokens['--dsw-alias-bg-base'];
+  if (LINK_RULE_ALPHA === null || ink === undefined || ground === undefined) continue;
+  linkRuleAssertions += 1;
+  const rgb = parse(ink);
+  const rule = composite(parse(`rgba(${rgb.r},${rgb.g},${rgb.b},${LINK_RULE_ALPHA})`), parse(ground));
+  const ratio = contrast(rule, parse(ground));
+  measured.push({
+    themeName,
+    id: 37,
+    fg: `link rule (${ink} @ ${LINK_RULE_ALPHA})`,
+    bg: 'bg-base',
+    ratio,
+    min: LINK_RULE_FLOOR,
+    ok: ratio >= LINK_RULE_FLOOR,
+  });
+  if (!(ratio >= LINK_RULE_FLOOR)) {
+    failures.push(
+      `#37 ${themeName}: the link rule composites to ${ratio.toFixed(3)}:1 against the ground, below the ` +
+        `${LINK_RULE_FLOOR} floor -- the underline has stopped being a second channel, and #32's recorded ` +
+        'collision (link vs error ink) is then all a reader has',
+    );
+  }
+}
+
 /* ── report ─────────────────────────────────────────────────────────────── */
 
 if (process.argv.includes('--verbose')) {
@@ -837,7 +897,8 @@ const assertions =
   hoverAssertions +
   elevationAssertions +
   separationAssertions +
-  glassAssertions;
+  glassAssertions +
+  linkRuleAssertions;
 if (failures.length) {
   console.error(`contrast: ${failures.length} FAILED of ${assertions} assertions\n`);
   for (const f of failures) console.error('  ✗ ' + f);
@@ -851,5 +912,5 @@ console.log(
     `+ ${labelPairAssertions} inverted-label plate ` +
     `+ ${hoverAssertions} hover direction ` +
     `+ ${elevationAssertions} elevation model + ${separationAssertions} recorded link/error separation ` +
-    `+ ${glassAssertions} glass surface shape)`,
+    `+ ${glassAssertions} glass surface shape + ${linkRuleAssertions} link-rule visibility)`,
 );

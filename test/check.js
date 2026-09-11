@@ -721,19 +721,38 @@ check(
 
 /* HanaAgent legislates --border-width: 0.5px as part of the same rule, and DSH
    already draws most of its own hairlines at .5px. Where THIS theme declares a
-   hairline it must match, or the theme's own lines are the heaviest on screen. */
+   hairline it must match, or the theme's own lines are the heaviest on screen.
+ *
+ * ONE EXCEPTION, and it was found by a real rule rather than imagined: the
+ * reference's markdown link is `border-bottom: 1px solid rgba(var(--link-rgb),
+ * 0.35)` (styles.css, 「链接」). Its 0.5px is the STRUCTURAL hairline -- cards,
+ * rails, table grids -- while a link's underline is its own 1px rule. The first
+ * version of this judgement knew only 0.5px and 2px and failed a faithful port,
+ * which is the judgement being incomplete rather than the port being wrong. The
+ * exemption is deliberately narrow: 1px, bottom edge only, on the link rule. */
 {
-  const hanaHairlines = [...css.matchAll(/border(?:-(?:top|bottom|left|right))?:\s*(\d+(?:\.\d+)?)px solid/g)]
-    .map((m) => Number(m[1]))
-    .filter((n) => n < 2);
-  const heavy = [...css.matchAll(/border(?:-(?:top|bottom|left|right))?:\s*(\d+(?:\.\d+)?)px solid/g)]
-    .map((m) => Number(m[1]))
-    .filter((n) => n !== 0.5 && n !== 2);
+  /* The whole declaration, not just up to `solid`: the exemption below is about
+     WHICH declaration it is (the link rule's, and only that one), so a match that
+     stopped at the width could not tell it from any other 1px bottom border. */
+  /* Scanned on the COMMENT-STRIPPED sheet. The first version read the raw one, and
+     the block above quotes the reference's own `border-bottom: 1px solid
+     rgba(var(--link-rgb), 0.35)` in prose -- so the judgement reported a border
+     that does not exist in the shipped CSS. A commented-out declaration is not a
+     declaration, which is the same reason tools/derive-grain.mjs strips first. */
+  const borderWidths = [...bare.matchAll(/border(?:-(?:top|bottom|left|right))?:\s*(\d+(?:\.\d+)?)px solid[^;]*/g)]
+    .map((m) => ({ width: Number(m[1]), text: m[0].replace(/\s+/g, ' ').trim() }));
+  const hanaHairlines = borderWidths.filter((b) => b.width < 2);
+  const LINK_RULE = 'border-bottom: 1px solid var(--hana-link-rule)';
+  const heavy = borderWidths
+    .filter((b) => b.width !== 0.5 && b.width !== 2)
+    .filter((b) => b.text !== LINK_RULE);
   check(
     heavy.length === 0,
-    "the theme draws a border at " + JSON.stringify([...new Set(heavy)]) + "px. HanaAgent's rule is " +
-      "--border-width: 0.5px, and the only heavier stroke it sanctions is the 2px left rule it uses " +
-      'for blockquotes and callouts.',
+    "the theme draws a border at " + JSON.stringify([...new Set(heavy.map((b) => b.width))]) +
+      "px. HanaAgent's rule is " +
+      '--border-width: 0.5px, and the only heavier strokes it sanctions are the 2px left rule it uses ' +
+      'for blockquotes and callouts, and the 1px underline on its markdown links. ' +
+      "Offending: " + JSON.stringify([...new Set(heavy.map((b) => b.text))]),
   );
   check(hanaHairlines.length > 0, 'no sub-2px hairline found at all — did the borders get removed?');
 
@@ -743,7 +762,7 @@ check(
      mutation that set --hana-chip-edge back to 1px was NOT CAUGHT. A rule that
      reads the declarations but not what they resolve to is a rule that measures
      the shape of the theme rather than the theme. */
-  const edgeProps = [...css.matchAll(/(--hana-[a-z-]*edge[a-z-]*):\s*(\d+(?:\.\d+)?)px/g)];
+  const edgeProps = [...bare.matchAll(/(--hana-[a-z-]*edge[a-z-]*):\s*(\d+(?:\.\d+)?)px/g)];
   check(
     edgeProps.length > 0,
     'no --hana-*-edge variable found; the hairline width is no longer a named value',
@@ -959,6 +978,93 @@ const focusSel = "body[" + "data-hana-theme" + "][" + "data-hana-focus" + "='acc
     source.includes('黑夜模式不支持纸质纹理'),
     'the panel does not carry the hint that explains the veto',
   );
+}
+
+/* ── 字距寄存器 · 链接细线 ──────────────────────────────────────────────
+ *
+ * Two items from docs/plan-square-geometry.md §7, and both turn on the same
+ * question the geometry ledger asks: which parts of a 76-declaration reference
+ * register survive into a host whose every element is a build hash.
+ *
+ * The tracking register is a PAIR -- a label value and an explicit zero -- and
+ * the zero changes no pixel today. It is written down because it is an invariant
+ * a mutation can break, which is worth more than a comment saying "data is not
+ * tracked".
+ *
+ * The link rule is a border-bottom because that is what HanaAgent uses, and the
+ * reason this theme previously gave for NOT using one (that colouring the
+ * harness's reserved transparent hit-area border would shrink the click target)
+ * was a category error: colouring a border that already exists does not narrow
+ * it. What DOES narrow it is changing the width, which is a separate edit -- so
+ * the judgement below pins the three transparent borders the hit area is made of,
+ * because those are the thing that must survive.
+ */
+{
+  for (const token of ['--hana-track-label', '--hana-track-data']) {
+    const declared = new RegExp(token + ':\\s*[^;]+;').test(bare);
+    check(declared, `the tracking register does not declare ${token}`);
+    check(
+      new RegExp('var\\(\\s*' + token + '\\s*[,)]').test(bare),
+      `${token} is declared and never read`,
+    );
+  }
+  check(
+    /--hana-track-label:\s*0\.05em/.test(bare) || /--hana-track-label:\s*0\.08em/.test(bare),
+    'the label tracking is outside the band the reference uses for short labels (.05-.08em on its ' +
+      'reading surface, .02-.18em across the register)',
+  );
+  check(
+    /--hana-track-data:\s*0\s*;/.test(bare),
+    'the data tracking is not exactly 0. HanaAgent zeroes data-like text EXPLICITLY rather than by ' +
+      'inheritance, and the whole point of the pair is that the two ends differ.',
+  );
+  const th = /\[data-chat-flow-kind='assistant-step'\] th\s*\{([^}]*)\}/.exec(bare);
+  const td = /\[data-chat-flow-kind='assistant-step'\] td\s*\{([^}]*)\}/.exec(bare);
+  check(th !== null && /letter-spacing:\s*var\(--hana-track-label\)/.test(th[1]),
+    'table headers do not take the label tracking; a header is the one thing HanaAgent tracks in its reading surface');
+  check(td !== null && /letter-spacing:\s*var\(--hana-track-data\)/.test(td[1]),
+    'table cells do not take the explicit zero');
+
+  /* The link rule itself. */
+  const linkRule = /\[data-chat-flow-kind='assistant-step'\] a\s*\{([^}]*)\}/.exec(bare);
+  check(linkRule !== null, 'no link rule for the reading surface');
+  if (linkRule) {
+    check(
+      /text-decoration:\s*none/.test(linkRule[1]),
+      'the link rule does not clear text-decoration. HanaAgent sets `text-decoration: none` on its ' +
+        'anchors and draws a border instead; leaving the harness underline on gives a link two lines.',
+    );
+    check(
+      /border-bottom:\s*1px solid var\(--hana-link-rule\)/.test(linkRule[1]),
+      'the link rule is not the reference\'s 1px bottom border in var(--hana-link-rule)',
+    );
+  }
+  const linkHover = /\[data-chat-flow-kind='assistant-step'\] a:hover[^{]*\{([^}]*)\}/.exec(bare);
+  check(
+    linkHover !== null && /text-decoration:\s*none/.test(linkHover[1]),
+    'the link hover does not clear text-decoration. The harness\'s own hover is ' +
+      '`text-decoration: underline`, so without this the resting border and the hover underline stack.',
+  );
+  check(
+    linkHover !== null && /border-bottom-color:\s*var\(--hana-link-rule-hover\)/.test(linkHover[1]),
+    'the link hover does not take the rule to its full-strength colour',
+  );
+
+  /* And the hit area, which is the thing the old comment was actually worried
+     about. The harness makes the anchor easier to click with THREE further
+     zero-alpha borders (3px left/right, 2px top) and pulls them back with
+     negative margins; only the BOTTOM one is the reference's to colour. Writing
+     the `border` shorthand here -- the one-character edit that looks tidier --
+     resets all four sides and deletes the horizontal enlargement, which is the
+     part a text link is actually clicked on. */
+  if (linkRule) {
+    check(
+      !/(^|[^-])border\s*:/.test(linkRule[1]),
+      'the link rule writes the `border` SHORTHAND. That resets all four sides, including the three ' +
+        'zero-alpha borders the harness uses as the anchor\'s hit area -- colouring the bottom border is ' +
+        'the reference\'s treatment, and removing the other three is what would really shrink the target.',
+    );
+  }
 }
 
 /* ── the geometry ledger, validated OFFLINE ─────────────────────────────

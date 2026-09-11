@@ -91,6 +91,7 @@
     "derive:grain": "node tools/derive-grain.mjs --list",
     "grain:check": "node tools/derive-grain.mjs --check",
     "verify:texture": "node test/verify/texture-check.mjs",
+    "verify:link": "node test/verify/link-check.mjs",
     "verify:focus": "node test/verify/focus-check.mjs",
     "verify:focus:shot": "node test/verify/focus-check.mjs --keep"
   },
