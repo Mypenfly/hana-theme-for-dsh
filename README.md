@@ -218,7 +218,17 @@ Midnight's narrow range is the honest cost of its **code surface being light** (
 
 A theme fails *silently*. A misspelled token is accepted without complaint and read by nobody; a stray character makes the browser drop one rule and carry on; a stylesheet colour looks correct right up until another token-writing plugin is installed. So the checks here are not ceremony.
 
-**`test/contrast.test.js` — 132 assertions.** 19 pairs × 4 palettes, per-scheme foreground polarity, a link-readability band, a compositing model for the paper grain, and **the code-block syntax colours: 9 tokens × 4 palettes plus 4 "the palette was not flattened" assertions**. Values are read out of the shipped tables, never a second copy. Run with `--verbose` to print every measured pair.
+**`test/contrast.test.js` — 176 assertions.** 19 pairs × 4 palettes, per-scheme foreground polarity, a link-readability band, a compositing model for the paper grain, **the code-block syntax colours: 9 tokens × 4 palettes plus 4 "the palette was not flattened" assertions**, **20 assertions on the shape of the ink ramp**, **4 on hover direction**, **16 on the elevation model** and **4 recorded link/error separations**. Values are read out of the shipped tables, never a second copy. Run with `--verbose` to print every measured pair.
+
+The twenty ink-ramp assertions deserve their own paragraph, because they repair a **claim that was not true**. `skin.json` and the L1 header both said "five ink stops"; what shipped was four, in four different rhythms. `label-caption` was byte-identical to `label-tertiary` in every palette — a step of 1.00, two named levels of hierarchy rendered as one colour — and the middle step ran from 0.49 (珊瑚) to 0.87 (青夜). The cause was that the five cells were filled in one at a time, before anything knew who consumed them.
+
+So the ramp is no longer five hand-picked values but **two anchors and a geometric rule**: `label-primary` (the palette's identity) and `label-tertiary` (the stop that must clear AA) are untouched, `secondary` is their geometric mean in contrast ratio, and `caption`/`dimmed` continue below at f^2.5 and f^3 on a line in OKLab from primary toward tertiary. `tools/derive-ink-ramp.mjs` produces the values and `npm test` recomputes them; `contrast.test.js` **separately asserts the shape** (every step under 0.90, the upper ramp geometric to ±1.5%). Asserting only the values would make the tool and the test the same claim twice; asserting only the shape would let the values wander anywhere the shape allows.
+
+A factor shared across palettes is **not achievable**, and the tool says so itself: 青夜's body ink is only 7.51:1, so the span from AA to the ink is short and its factor is necessarily 0.78 against 纸本's 0.63. Equalising it would mean moving either the body ink or the AA floor. What is equalised is the **shape**.
+
+Raising `tertiary` "for margin" was tried and **rejected**: f is sqrt(t/p), so lifting the floor narrows every step — on exactly the palettes that are already tightest. Margin and rhythm are separate questions, and mixing them would have made the tool quietly a redesign. 青夜's 4.52:1 is **reported as TIGHT** instead of being moved without saying so.
+
+**`tools/derive-ink-ramp.mjs --check`** is in `npm test` for the same reason as `derive-shiki`: the values can be recomputed from two anchors, so they should not have the freedom to drift.
 
 **`test/check.js` — 91 static judgements.** No hash-shaped selectors, nothing declared on `:root`, no registered colour token declared in the stylesheet, no `--hana-*` token that nothing reads, no `settingsScope.bind()` with a bare string, no synchronous `setTheme()` in a `theme/change` listener, an idempotent override layer, every runtime path present in `files`, a `ctx.effect` disposer chain that releases every side effect, and the syntax palette applied on the palette path and released on the detach path. The new judgements were mutation-tested: delete `applyShiki()` or `clearShiki()` and the build must fail.
 
@@ -240,6 +250,8 @@ An `UNCLASSIFIED` entry fails the build, so **when a DSH upgrade introduces a ne
 The reverse direction matters just as much: **a surface claimed as `theme` must actually be supplied**, or the ledger drifts into fiction — which is worse than having none, because it makes the gap look closed.
 
 **`test/tokens.test.js`** — every colour token name must appear in an allow-list generated from the installed harness, all four palettes must cover the same names, the eleven syntax names must match the harness's declared set exactly (also generated, by `refresh-allowlist.mjs`), and `--shiki-background` must equal the `--dsw-alias-markdown-code-block` it is painted on.
+
+It now asserts **in both directions**, and the second one is the gap that was missing. The original check only bounded which names a palette MAY use, so supplying none of them satisfied it — **which is the state this shipped in**: `--dsw-alias-link` read with a bare `var()` by `dsh-client-ui-primitives` and declared by nobody. Now every read-but-undeclared name must be **supplied** (a name whose reads all carry a fallback may be declined, but the reason must be written into the generator rather than left unsaid), and every supplied value must equal **the role it is bound to**. Both directions are mutation-proven.
 
 **`test/runtime.test.js` — 95 assertions, with the plugin actually EXECUTED.** Every suite above reads source text or shipped tables; this one reads behaviour. That distinction matters more here than it usually would, because "the theme fails silently" is a runtime property: a token the presenter wipes, a listener that re-enters, a deferred re-apply that loses a race, a write that lands nowhere. None of those are visible in the text of a file, and the one severe bug in this project's history (§5.7, the four-layer settings-persistence chain) was made entirely of them. The lesson that bug produced was *"① explicit contract + ② visible durability state + ③ a judgement"* — ① and ② shipped long ago; **③ never did.**
 
@@ -265,7 +277,9 @@ The inline styles in the probe come from **the real plugin**, not restated from 
 
 **`test/selftest.js` — the mutation proof that the above is not vacuous.** A test that passes for the wrong reason looks exactly like one that passes for the right reason, and nothing in a green run tells them apart. This repo has already been on the wrong side of that: 91 contrast assertions were passing while an entire colour channel was unreadable.
 
-So it takes the **real** bundle, injects a bug that either happened here or is a plausible next one, runs the suite in a **fresh process** against the mutated copy, and requires it to fail. Two things keep it honest: the injection is itself verified (a stale anchor is reported `INAPPLICABLE` and **counted as a failure**, because a mutation that silently did not apply would "pass" while proving nothing), and the expected *section* must appear in the output — "something failed" would also be satisfied by an unrelated crash. Thirteen mutations, thirteen behaviours, all caught, plus a baseline asserting the unmutated bundle passes.
+So it takes the **real** bundle, injects a bug that either happened here or is a plausible next one, runs the suite in a **fresh process** against the mutated copy, and requires it to fail. Two things keep it honest: the injection is itself verified (a stale anchor is reported `INAPPLICABLE` and **counted as a failure**, because a mutation that silently did not apply would "pass" while proving nothing), and the expected *section* must appear in the output — "something failed" would also be satisfied by an unrelated crash. Twenty mutations, twenty behaviours, all caught, plus a baseline asserting the unmutated sources pass every suite involved.
+
+A mutation may name its **target file** and its **suite** (`test/runtime.test.js`, `tokens.test.js`, `contrast.test.js`), so `test/load-client.js` and `test/tokens.test.js` honour `HANA_BUNDLE` and `HANA_ALLOWLIST` and point at copies — the real files are never rewritten. Three of the twenty aim at the generated allow-list and the alias-binding map rather than the bundle, and two **restore values this project actually shipped**: the byte-identical caption, and the hover that weakened. A gate never shown to fail against a **known-bad input** is decoration.
 
 > An honest note: B1 found no new bug. The real bundle was already correct on all eleven behaviours. Its value is turning "no bug" from a comment into **a conclusion with evidence, and then locking it** — which is worth as much as a fix, but reads less dramatically.
 
@@ -273,15 +287,34 @@ The suite has earned its keep. It has caught a load-time crash, three dead token
 
 ## Compatibility
 
-Verified against **DeepSeek Harness Desktop 2.0.5 / 2.0.6** with **`@deepseek-ai/dsh-client-ui-theme` 0.1.2-rc.1** (89 colour tokens + 11 syntax variables). `package.json` declares the tested range `0.1.2-rc.1 – 0.1.5-alpha.1`; the later version adds exactly one token (`--dsw-alias-link`), which this theme does not use and which the allow-list records as version-dependent.
+Verified against **DeepSeek Harness Desktop 2.0.5 / 2.0.6** with **`@deepseek-ai/dsh-client-ui-theme` 0.1.2-rc.1** (89 registered colour tokens + 11 syntax variables). `package.json` declares the tested range `0.1.2-rc.1 – 0.1.5-alpha.1`.
+
+That range is not empty. 0.1.5-alpha.1 adds one token, `--dsw-alias-link`, and **the copy of `dsh-client-ui-primitives` installed here — the one the community market ships — really does read it**, inside a `var()` with **no fallback**. With no fallback the declaration is invalid at computed-value time: not "falls back to the default", but the property disappears. So this theme **supplies** it, along with eight other names in the same position:
+
+| name | read by | bound to |
+|---|---|---|
+| `--dsw-alias-link` | `dsh-client-ui-primitives` | `brand-text` |
+| `--dsw-alias-label-error` | `dsh-client-ui-settings-plugins` | `state-error-primary` |
+| `--dsw-alias-separator-primary` | `dsh-client-ui-chat` | `border-l1` |
+| `--dsw-alias-label-quaternary` | `dsh-client-ui-agent-preset` | `label-dimmed` |
+| `--dsw-alias-state-warning-primary` | `settings-plugin-inventory`, `dsh-plugin-desktop` | `state-warn-primary` |
+| `--dsw-alias-bg-layer-4` | `dsh-client-ui-settings-plugins` | `interactive-bg-hover-solid` |
+| `--dsw-alias-fill-l2`, `--dsw-alias-fill-tsp-secondary` | `dsh-client-ui-jobs`, `agent-preset` | `bg-layer-3` |
+| `--dsw-alias-border-default` | `dsh-plugin-desktop` | `border-l1` |
+
+Each is **bound** to a role the palette already defines rather than to a new colour, so there is no second value to keep in step; `test/tokens.test.js` asserts the binding. The one **declined** name is `--dsw-alias-font-mono` — a font channel, not a colour, and its read has a fallback — and the reason is recorded in the generator rather than omitted.
+
+All of this comes from a new **reference-side scan**: `npm run refresh:allowlist` now looks at who *reads* a name as well as who declares it, and records whether each read has a fallback. The reason is `--dsw-alias-link` itself: the old gate said a name outside the 89 is a silent no-op, which is true of declarations and false of references, and those nine names live in the gap.
 
 Stable anchors relied on: the 89 registered token names, the 11 `--shiki-*` names, `--dsw-font-markdown-*`, `--dsh-content-font-size`, `body[data-ds-dark-theme]`, `md-code-block`, `md-table-wide`, `data-chat-flow-kind`, `data-composer-card`, `settings.section`.
 
-After a harness upgrade run both of these and **read the diffs**:
+After a harness upgrade run these and **read the diffs**:
 
 ```bash
-npm run refresh:allowlist     # token names; one that disappears is an override that stopped working
+npm run refresh:allowlist     # token names + a reference-side scan; a token that disappears is an override that stopped working
 npm run refresh:surfaces      # colour surfaces; a new one arrives as UNCLASSIFIED and fails the build
+npm run derive:ink            # ink ramp; re-derive after touching either anchor
+npm run derive:shiki          # syntax palette; same
 ```
 
 The second is new, and it exists because of the code-block defect: **a new colour surface can no longer slip through unnoticed** — it turns up in the ledger demanding a decision.
@@ -295,6 +328,8 @@ The second is new, and it exists because of the code-block defect: **a new colou
 - **Midnight's code surface was not darkened.** See the end of the syntax-highlighting section: darkening it would restore the syntax palette's differentiation, but it is a look change and is left to you.
 - **`--dsh-state-ongoing` is still brand blue.** Unreachable (see the traps list), recorded in the ledger rather than papered over.
 - **Interface font size.** There is no token channel for it (64 hardcoded px values, measured), so the app's own Electron zoom is the answer; a CSS `zoom` replica is deliberately not shipped.
+- **DSH Desktop's five native screens cannot be themed.** First-run setup, the profile switcher, profile creation, crash recovery, the desktop dialog — they are **separate documents** with no plugin host, and `desktop-dialog.html` declares `style-src 'self'`, **forbidding even an inline `<style>`** — which is the one channel this theme has left. Their chrome is Tailwind/shadcn, whose vocabulary is `--background` / `--card` / `--gray1..12` / `--tw-*`, with **zero** references to `--dsw-*`. Not a defect, a boundary: **those screens stay grey and will never follow the theme.** That tree holds 83 stylesheets (the store keeps two copies); the ledger records them as `notCovered`.
+- **Link ink and error ink are indistinguishable in the warm palettes.** 珊瑚 measures OKLab ΔE **0.019**, 青夜 0.030 (paper 0.208, vivid 0.228) — i.e. in 珊瑚 an error message and a link are the same colour. **This is not fixable by moving the error hue**: 珊瑚's link ink *is* its coral accent darkened to AA, which lands in the same dark red, and searching the red band the theme uses reaches only 0.080. Fixing it properly means giving 珊瑚 a non-coral link, which is a design decision rather than a repair, so it stands. The four values are pinned by assertion #32 — **they may be low, but they may not change silently.**
 
 ## License
 

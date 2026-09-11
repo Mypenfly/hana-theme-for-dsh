@@ -217,7 +217,17 @@ docs/            本实现所依据的调研与设计文档
 
 主题是**静默失败**的。拼错的令牌不会被抱怨、也无人读取；一个多余字符会让浏览器丢掉一条规则然后继续跑；样式表里的颜色看起来完全正确，直到用户装了另一个写令牌的插件。所以这里的检查不是仪式。
 
-**`test/contrast.test.js` —— 132 条断言。** 19 对 × 4 套配色、按模式的前景极性、链接可读性区间、纸纹的合成模型，以及**代码块语法色 9 × 4 + 4 条「色板没有被压平」**。数值**从交付的令牌表里直接读取**，绝不用第二份副本。加 `--verbose` 会打印每一对实测值。
+**`test/contrast.test.js` —— 176 条断言。** 19 对 × 4 套配色、按模式的前景极性、链接可读性区间、纸纹的合成模型、**代码块语法色 9 × 4 + 4 条「色板没有被压平」**、**20 条墨色梯度的形状**、**4 条悬停方向**、**16 条层次模型**、**4 条记录在案的链接/错误色间距**。数值**从交付的令牌表里直接读取**，绝不用第二份副本。加 `--verbose` 会打印每一对实测值。
+
+墨色那 20 条值得单独说，因为它修的是**一个名不副实的说法**。`skin.json` 和 L1 头部都写着「墨 5 档」，实际交付的是 4 档、而且是四种不同的节奏：`label-caption` 在四套配色里与 `label-tertiary` **完全相同**（级差 1.00 —— 两个命名层级画成同一个颜色），中段级差则在 0.49（珊瑚）到 0.87（青夜）之间摆动。根因是这五格是在还不知道消费者是谁的时候逐格填的。
+
+所以现在不是「五个人工取值」，而是**两个锚点 + 一条几何规则**：`label-primary`（配色的身份）与 `label-tertiary`（必须过 AA 的那一档）不动，`secondary` 取二者对比度的**几何中项**，`caption`/`dimmed` 按 f^2.5 / f^3 续下，取值落在 OKLab 里从 primary 指向 tertiary 的直线上。`tools/derive-ink-ramp.mjs` 生成这些值，`npm test` 逐步复算；`contrast.test.js` 另外**独立断言形状**（每级级差 < 0.90、上段几何性 ±1.5%）。只断言数值会让工具和测试变成同一句话的两遍，只断言形状则允许数值在任何满足形状的地方乱跑。
+
+一个跨配色共享的因子是**做不到**的，工具本身也这么说：青夜的正文墨色只有 7.51:1，从 AA 到墨色的跨度很短，它的因子必然是 0.78 而纸本是 0.63。要拉平就得动正文墨色或 AA 下限。被拉平的是**形状**。
+
+「为了让 `tertiary` 有余量而抬高它」试过并**否决**了：f = sqrt(t/p)，抬高下限会**收紧每一个级差**，而且恰恰收在最紧的那几套配色上。「余量」和「节奏」是两个问题，混在一起会让这个工具悄悄变成一次改版。所以青夜的 4.52:1 是**被报告成 TIGHT**，而不是被悄悄挪走。
+
+**`tools/derive-ink-ramp.mjs --check`** 也在 `npm test` 里，理由和 `derive-shiki` 一样：值可以从两个锚点重算出来，所以它们不该有漂移的自由。
 
 **`test/check.js` —— 91 条静态判据。** 禁止哈希选择器、禁止在 `:root` 上声明、禁止在样式表里声明已注册的颜色令牌、禁止无人读取的 `--hana-*` 令牌、禁止用裸字符串调 `settingsScope.bind()`、禁止在 `theme/change` 监听器里同步 `setTheme()`、override 层必须幂等、语法色板必须在配色路径上应用且在 detach 路径上释放、每一个运行时路径都必须在 `files` 里、以及一条 `ctx.effect` 释放链覆盖每一个副作用。新增的判据都做过**变异测试**——把 `applyShiki()` 或 `clearShiki()` 删掉，构建必须失败。
 
@@ -239,6 +249,8 @@ docs/            本实现所依据的调研与设计文档
 台账的另一个方向同样重要：**声称 `theme` 的表面必须真的被提供**，否则台账会漂成虚构——那比没有台账更糟，因为它让缺口看起来是关着的。
 
 **`test/tokens.test.js`** —— 每个颜色令牌名都必须出现在由已安装 harness 生成的白名单里；四套配色必须覆盖**同一组**名字；语法色板的 11 个名字必须与 harness 声明的**完全一致**（同样由 `refresh-allowlist.mjs` 从已安装工件里生成）；`--shiki-background` 必须等于它在上面作画的 `--dsw-alias-markdown-code-block`。
+
+它现在**两个方向都断言**，而第二个方向是补上的缺口。原来的判据只界定「可以用哪些名字」，于是「一个都不用」也能满足它——**而那正是交付时的状态**：`--dsw-alias-link` 被 `dsh-client-ui-primitives` 用无 fallback 的 `var()` 读着，却没有任何人声明它。所以现在：任何一个被读到的未声明名字都**必须被供应**（读取带 fallback 的可以拒绝，但必须在生成器里写明理由）；每个供应值必须等于它**绑定的那个角色**，两个方向都由 `test/selftest.js` 的变异证明不是空转。
 
 **`test/runtime.test.js` —— 95 条断言，插件真的被执行。** 上面所有套件读的都是**源码文本**或**交付的表格**；这一套读的是**行为**。这个区别在这里比在别处重要得多，因为「主题静默失败」本来就是运行时属性：一个被 presenter 抹掉的令牌、一个重入的监听器、一次输掉竞态的延迟重应用、一次落不到盘的写入——**没有一个是能从文件文本里看出来的**，而这个项目历史上唯一那次严重缺陷（§5.7 的四层设置持久化连环 bug）**全部由这些构成**。那次 bug 得出的教训是「① 显式契约 + ② 可见的持久化状态 + ③ 判据」；① 和 ② 早就上了，**③ 从来没上**。
 
@@ -285,7 +297,9 @@ npm run verify:render:shot     # 顺便留一张截图给人看
 1. **注入本身被验证。** 锚点文本找不到时（比如有人重构了那一行），这条变异被报为 `INAPPLICABLE` 并**计入失败**——一条悄悄没生效的变异会「通过」却什么也没证明，**这正是这个文件存在的意义**。
 2. **检查的是期望的章节文本**，不只是一个非零退出码——「有什么东西失败了」也会被一次无关的崩溃满足。
 
-13 条变异对应 13 条行为，全部被抓；外加一条基线（未变异的 bundle 必须通过），否则「它失败了」不说明任何事。
+**20 条变异对应 20 条行为，全部被抓；**其中 3 条打在生成的数据文件与绑定表上，2 条**复现本项目真实交付过的**墨色同值与珊瑚悬停变弱。外加一条基线（未变异的三套源码都必须通过），否则「它失败了」不说明任何事。
+
+变异现在可以指定**目标文件**与**要跑的套件**（`test/runtime.test.js` / `tokens.test.js` / `contrast.test.js`），所以 `test/load-client.js` 与 `test/tokens.test.js` 也接受 `HANA_BUNDLE` / `HANA_ALLOWLIST` 指向副本——真实文件永远不被改写。这一步是必要的：一个从没被证明能对**已知坏输入**失败的判据只是装饰。
 
 > **一个诚实的说明**：B1 没有**发现**新 bug——真实 bundle 在这 11 条行为上本来就是对的。它的价值是把「没有 bug」从一句注释变成**有证据的结论，并且锁住**。这和一个 bug 修复同样有价值，只是读起来没那么戏剧化。
 
@@ -293,15 +307,34 @@ npm run verify:render:shot     # 顺便留一张截图给人看
 
 ## 兼容性
 
-已针对 **DeepSeek Harness Desktop 2.0.5 / 2.0.6** 与 **`@deepseek-ai/dsh-client-ui-theme` 0.1.2-rc.1**（89 个颜色令牌 + 11 个语法变量）验证。`package.json` 声明测试过的区间为 `0.1.2-rc.1 – 0.1.5-alpha.1`；后者只多一个令牌（`--dsw-alias-link`），本主题不使用它，白名单把它记为 `versionDependent`。
+已针对 **DeepSeek Harness Desktop 2.0.5 / 2.0.6** 与 **`@deepseek-ai/dsh-client-ui-theme` 0.1.2-rc.1**（89 个已注册颜色令牌 + 11 个语法变量）验证。`package.json` 声明测试过的区间为 `0.1.2-rc.1 – 0.1.5-alpha.1`。
+
+那个区间不是空的：0.1.5-alpha.1 多一个令牌 `--dsw-alias-link`，而**本机装着的 `dsh-client-ui-primitives`（随社区市场一起分发的那份）确实在读它**，并且 `var()` 里**没有 fallback**。没有 fallback 时，声明在 computed-value 阶段直接失效——不是「回退到默认值」，是那个属性消失。所以本主题**供应**它，另有 8 个同类名字：
+
+| 名字 | 读它的包 | 绑到哪个已有角色 |
+|---|---|---|
+| `--dsw-alias-link` | `dsh-client-ui-primitives` | `brand-text` |
+| `--dsw-alias-label-error` | `dsh-client-ui-settings-plugins` | `state-error-primary` |
+| `--dsw-alias-separator-primary` | `dsh-client-ui-chat` | `border-l1` |
+| `--dsw-alias-label-quaternary` | `dsh-client-ui-agent-preset` | `label-dimmed` |
+| `--dsw-alias-state-warning-primary` | `settings-plugin-inventory` 等 | `state-warn-primary` |
+| `--dsw-alias-bg-layer-4` | `dsh-client-ui-settings-plugins` | `interactive-bg-hover-solid` |
+| `--dsw-alias-fill-l2`、`--dsw-alias-fill-tsp-secondary` | `dsh-client-ui-jobs`、`agent-preset` | `bg-layer-3` |
+| `--dsw-alias-border-default` | `dsh-plugin-desktop` | `border-l1` |
+
+每一个都**绑定**到本主题已经定义的角色，不引入新颜色，因此没有第二份值需要同步；绑定关系由 `test/tokens.test.js` 断言。唯一**拒绝**的是 `--dsw-alias-font-mono`（它是字体通道不是颜色，且它的读取带 fallback `ui-monospace, monospace`），拒绝理由记录在生成器里而不是省略掉。
+
+这套判断来自新增的**引用侧扫描**：`npm run refresh:allowlist` 现在不只看「谁声明了」，还看「谁在读」，并记录每个读取**有没有 fallback**。原因写在 `--dsw-alias-link` 上：旧的白名单判据说「不在 89 个之内的名字是静默空操作」——对**声明**成立，对**引用**不成立，而这两者之间就是上面这 9 个名字。
 
 依赖的稳定锚点：89 个已注册令牌名、11 个 `--shiki-*` 名、`--dsw-font-markdown-*`、`--dsh-content-font-size`、`body[data-ds-dark-theme]`、`md-code-block`、`md-table-wide`、`data-chat-flow-kind`、`data-composer-card`、`settings.section`。
 
-harness 升级后请跑这两条，并**读那份 diff**：
+harness 升级后请跑这四条，并**读那份 diff**：
 
 ```bash
-npm run refresh:allowlist     # 令牌名；消失的令牌 = 一个静默失效的覆写
+npm run refresh:allowlist     # 令牌名 + 引用侧扫描；消失的令牌 = 一个静默失效的覆写
 npm run refresh:surfaces      # 颜色表面；新出现的表面会以 UNCLASSIFIED 让构建失败
+npm run derive:ink            # 墨色梯度；改动任何一档后重新推导
+npm run derive:shiki          # 语法色；同上
 ```
 
 第二条是本仓库在代码块那处缺陷之后新增的：**一个新的颜色表面不会再无声无息地溜过去**，它会带着「请做决定」的要求出现在台账里。
@@ -315,6 +348,8 @@ npm run refresh:surfaces      # 颜色表面；新出现的表面会以 UNCLASSI
 - **青夜的代码底色没有压暗。** 见「代码块的语法高亮」末尾：压暗它能拿回语法色的区分度，但那是一次观感改动，留给你决定。
 - **`--dsh-state-ongoing` 仍是品牌蓝。** 够不到（见上方坑列表），如实记录在台账里，没有假装覆盖。
 - **界面字号。** 无令牌通道（实测 64 处硬编码 px），改用应用自带的 Electron 缩放，刻意不做 CSS `zoom` 的复制品。
+- **DSH Desktop 的 5 个原生界面换不了肤。** 首次设置、切换 profile、创建 profile、崩溃恢复、desktop 对话框——它们是**独立文档**，没有插件宿主；而且 `desktop-dialog.html` 的 CSP 是 `style-src 'self'`，**连内联 `<style>` 都禁止**，也就是主题唯一还有的手段在那里是被禁的。它们的外壳是 Tailwind/shadcn，词表是 `--background` / `--card` / `--gray1..12` / `--tw-*`，对 `--dsw-*` 的引用数是 **0**。这不是缺陷，是边界：**那几屏永远是灰的，不会跟着主题走。** 后面那棵树有 83 张样式表（store 里存了两份），台账把它们记成 `notCovered`。
+- **暖色配色里链接色与错误色分不开。** 珊瑚测得 OKLab ΔE **0.019**、青夜 0.030（纸本 0.208、斑斓 0.228）——也就是说在珊瑚里，报错和链接是同一个颜色。**这条不能靠调错误色修好**：珊瑚的链接色**就是**它的强调色压暗到 AA 的结果，与错误色落在同一片深红；在主题使用的红色区间里搜索，最好也只到 0.080。真要解决得给珊瑚一个非珊瑚色的链接，那是设计决定而不是修复，所以留着。四个值被判据 #32 钉住：**可以低，但不许悄悄变。**
 
 ## 许可证
 

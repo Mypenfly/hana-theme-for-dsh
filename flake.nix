@@ -67,15 +67,19 @@
       #
       # Every command here is offline by construction. `derive-shiki.mjs --check`
       # qualifies because the repainted source palette is part of the
-      # reproduction, not read out of an installed harness. `selftest.js` needs
-      # to spawn a child process; if that is ever forbidden it exits 2 with a
-      # message saying so, rather than reporting a mutation as caught.
+      # reproduction, not read out of an installed harness. `derive-ink-ramp.mjs
+      # --check` qualifies for the same reason: the ramp is recomputed from two
+      # anchors already in lib/client.js, so nothing is read from the machine.
+      # `selftest.js` needs to spawn a child process; if that is ever forbidden
+      # it exits 2 with a message saying so, rather than reporting a mutation as
+      # caught.
       checkCommands = ''
         node test/check.js
         node test/tokens.test.js
         node test/surfaces.test.js
         node test/contrast.test.js
         node tools/derive-shiki.mjs --check
+        node tools/derive-ink-ramp.mjs --check
         node test/runtime.test.js
         node test/selftest.js
       '';
@@ -147,6 +151,7 @@
                 npm run surfaces:check      is the committed colour-surface ledger still fresh?
                 npm run refresh:surfaces    re-scan DSH for colour-carrying custom properties
                 npm run derive:shiki        re-derive the syntax-highlighting palettes
+                npm run derive:ink          re-derive the ink ramp from its two anchors
                 npm run probe               print the Phase 0 DOM probe script
 
                 dsh plugin --profile web add "link:$PWD"    install (desktop is app-owned)
