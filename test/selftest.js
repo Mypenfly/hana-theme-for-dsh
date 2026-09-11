@@ -197,6 +197,22 @@ const MUTATIONS = [
     find: '      "--dsw-alias-label-secondary": "#405062",\n',
     replace: '      "--dsw-alias-label-secondary": "#314153",\n',
   },
+  {
+    id: 'hover-toward-the-surface',
+    why: 'restores 珊瑚\'s shipped hover fill, the only state in the theme that made a primary button WEAKER (12.52:1 -> 10.80:1) exactly when the pointer said it was the target',
+    suite: 'ramp',
+    marker: 'moves TOWARD the surface',
+    find: '      "--dsw-alias-button-primary-hover": "#091E36",\n',
+    replace: '      "--dsw-alias-button-primary-hover": "#243A55",\n',
+  },
+  {
+    id: 'layer-3-paints-nothing',
+    why: 'restores 青夜\'s shipped bg-layer-3, whose lightness was EXACTLY the ground\'s — a surface read by 21 stylesheets that painted nothing, and the value that broke the nesting model',
+    suite: 'ramp',
+    marker: 'nesting must go deeper',
+    find: '      "--dsw-alias-bg-layer-3": "#303E47",\n',
+    replace: '      "--dsw-alias-bg-layer-3": "#3C4A52",\n',
+  },
 ];
 
 const verbose = process.argv.includes('--verbose');

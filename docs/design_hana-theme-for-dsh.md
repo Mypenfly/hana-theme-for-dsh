@@ -68,7 +68,7 @@
 
 | E22 | E5：把三个名字判为死令牌，依据是 `grep -c 'var(--dsw-alias-separator-primary)' <frontend css>` → 0 | ❌ **结论错在两个名字上**。那个 grep 只扫了 `dsh-web-frontend` 的 bundle，**没有扫各个 `dsh-client-ui-*` 包**，而两个名字恰恰只在那里被读：`dsh-client-ui-chat` 用 `separator-primary` 画行间的间隔点（`color`），`dsh-client-ui-settings-plugins` 用 `label-error` 画无效输入（`border-color` 与 `color`）——而且两处 `var()` **都没有 fallback**，所以不供应不是"回退到 harness 默认"，而是该声明在 computed-value 阶段直接失效、属性消失。`line-secondary` 确实 declare=0 且 consume=0，结论保留 | 新增的**引用侧**扫描：`npm run refresh:allowlist` 现在同时报告 `consumedNotRegistered`（名字、读取它的包、以及该读取有没有 fallback）。本机实测 10 个名字被读而未被 0.1.2-rc.1 声明，其中 8 个的读取**没有 fallback**；`test/tokens.test.js` 现在两个方向都断言，`test/selftest.js` 用 3 条变异证明它不是空转 |
 | E23 | §3.1 与 §3.2 的"**墨 5 档**"逐格填值（`label-secondary` 8.50 / `label-caption` = 三级 / `label-dimmed` 3.13） | ❌ **名不副实，实际只有 4 档，而且四套配色各走各的**。① `label-caption` 在四套配色里与 `label-tertiary` **完全相同**——级差 1.00，两个命名层级画成同一个颜色（上游 DSH 在明暗两种模式下都把它们分开 14.5 L*，且 caption 始终更靠近背景）；② 中段级差在 0.49（珊瑚）到 0.87（青夜）之间，`label-secondary`/`label-tertiary` 各 22/23 处消费者、全是正文。根因是这五格是在还不知道消费者是谁的时候逐格填的 | 现改为**几何推导**：`primary` 与 `tertiary` 作锚点（identity 与 AA 下限，均未改动），`secondary` 取二者对比度的几何中项，`caption`/`dimmed` 按 f^2.5 / f^3 续下；`tools/derive-ink-ramp.mjs` 生成、`npm test` 逐步复算，`test/contrast.test.js #29` 另外独立断言**形状**（每级级差 < 0.90、上段几何性 ±1.5%）。受影响：四套配色的 `secondary`/`caption`/`dimmed`，以及两个镜像 role `label-primary-dimmed`、`markdown-placeholder` |
-
+| E24 | §3.2 与 §5.6 的四套配色里，主按钮 hover 与各级层次值分别取值 | ❌ **两处内部矛盾**。① 珊瑚的主按钮悬停**变弱**（对底色 12.52:1 → 10.80:1），另外三套都是变强（1.18–1.45x）——指针指向它时它反而更像禁用。② 青夜的 `bg-layer-3` 与 `bg-base` 明度**完全相同**（差 0.0 L*），而它被 21 张样式表读取，等于画了个空；斑斓的 `bg-layer-3` 反而比底色更亮（+3.2），方向与另外三套相反 | 悬停改为断言「必须远离底色、且至少 1.10x」（珊瑚解为 `#091E36`，1.250x）；层次模型写成四条断言——layer-1 抬起、layer-2 下沉、layer-3 比 layer-2 更深、skeleton 恒等于 layer-3（青夜 → `#303E47`，斑斓 → `#1C2830`）。3 条变异复现旧值证明断言不空转 |
 **因此对正文的三处结构性修正**
 
 1. **D1 精确化为**：颜色**只**走 `register()`；`--dsw-font-*` 等**非可注册**令牌**只**走 CSS。两者不是"分工"，是互斥的通道 —— 同一条令牌不可能两条路都走通。
@@ -1553,6 +1553,8 @@ README 写"最近验证日期 + 实测 DSH 版本"，并列出**依赖的稳定�
 | 9 | **对比度被纹理拉低** | 可读性下降 | ✅ 亮度补偿 + 回归断言（§5.2） |
 | 10 | **动效无法关闭** | 无障碍问题 | ✅ 源头全局兜底（**修正 HanaAgent 的缺陷**）+ 设置页提示（§5.3） |
 | 11 | **体积失控** | 插件臃肿 | ✅ 零二进制资源；程序化纹理；不打包字体 |
+| 12 | **链接色与错误色在暖色配色里分不开** | 把报错当成链接 | ⚠️ 已知，且**不能靠调错误色修好**：珊瑚 ΔE 0.019、青夜 0.030（纸本 0.208、斑斓 0.228）。在主题使用的红色区间内移动错误色最多到 0.080——因为珊瑚的链接色**就是**它的强调色压暗到 AA 的结果，与错误色落在同一片深红。真要解决得给珊瑚一个非珊瑚色链接，那是设计决定而非修复。四个值由判据 #32 钉住：可以低，但不许悄悄变 |
+| 13 | **DSH Desktop 的 5 个原生界面无法被任何客户端插件换肤** | 首次设置 / 切换 profile / 崩溃恢复 / 对话框保持灰调，与纸本拼接处有色差 | ⚠️ 结构性边界，不是缺陷：它们是**独立文档**（`desktop-dialog.html` 等），没有插件宿主，且 `desktop-dialog.html` 的 CSP 是 `style-src 'self'`——连内联 `<style>` 都禁止，也就是主题唯一的手段在那里被禁。外壳是 Tailwind/shadcn，词表为 `--background/--card/--gray1..12`，对 `--dsw-*` 的引用数为 **0**。写进 README，让用户知道这块永远不跟随主题 |
 
 ---
 

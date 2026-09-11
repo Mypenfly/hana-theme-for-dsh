@@ -84,4 +84,37 @@ function contrast(foreground, background) {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-module.exports = { parse, composite, luminance, contrast };
+/**
+ * OKLab coordinates. WCAG contrast answers "is this readable", which is a
+ * luminance question; it cannot answer "are these two colours the same", which
+ * is the question a role collision turns on. Two tokens can share a hue and
+ * still be obviously different (different lightness), or sit 30 degrees apart
+ * and be indistinguishable. Perceptual distance needs a perceptual space.
+ */
+function oklab(colour, under) {
+  let c = typeof colour === 'string' ? parse(colour) : colour;
+  if (c.a < 1) {
+    if (!under) throw new Error('cannot measure a translucent colour without a background');
+    c = composite(c, typeof under === 'string' ? parse(under) : under);
+  }
+  const r = channel(c.r);
+  const g = channel(c.g);
+  const b = channel(c.b);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return {
+    L: 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    a: 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    b: 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s,
+  };
+}
+
+/** Perceptual distance between two colours (Euclidean in OKLab). */
+function deltaE(one, two, under) {
+  const p = oklab(one, under);
+  const q = oklab(two, under);
+  return Math.hypot(p.L - q.L, p.a - q.a, p.b - q.b);
+}
+
+module.exports = { parse, composite, luminance, contrast, oklab, deltaE };

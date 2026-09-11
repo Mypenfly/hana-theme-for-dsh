@@ -13,7 +13,7 @@
  */
 
 const { loadClient } = require('./load-client');
-const { parse, luminance, contrast } = require('./color');
+const { parse, luminance, contrast, oklab, deltaE } = require('./color');
 
 const { exports: client } = loadClient();
 /* Iterate the palettes the plugin actually registers, so adding one to
@@ -405,6 +405,138 @@ for (const { id: themeName, tokens } of PALETTES) {
   }
 }
 
+/* ── #30: a hover state moves the fill AWAY from the surface ───────────────
+ *
+ * The whole job of a hover state on a solid button is to make the control more
+ * emphatic than it was at rest. Measured as contrast against `bg-base`, that
+ * means the ratio must RISE. 珊瑚 shipped the only state in the theme that went
+ * the other way — 12.52:1 at rest, 10.80:1 on hover — so its primary button got
+ * weaker exactly when the pointer said it was the target.
+ *
+ * The threshold is a step, not a value: the four palettes legitimately start
+ * from very different fills (3.97:1 to 12.52:1), so only the direction and a
+ * floor on the size of the move can be shared.
+ */
+const HOVER_MIN_STEP = 1.1;
+let hoverAssertions = 0;
+for (const { id: themeName, tokens } of PALETTES) {
+  hoverAssertions += 1;
+  const base = tokens['--dsw-alias-bg-base'];
+  const rest = contrast(tokens['--dsw-alias-button-primary-fill'], base);
+  const hover = contrast(tokens['--dsw-alias-button-primary-hover'], base);
+  const step = hover / rest;
+  if (!(step >= HOVER_MIN_STEP)) {
+    failures.push(
+      `#30 ${themeName}: the primary button is ${rest.toFixed(2)}:1 against bg-base at rest and ` +
+        `${hover.toFixed(2)}:1 on hover — a step of ${step.toFixed(3)}x. ` +
+        (step < 1
+          ? 'The fill moves TOWARD the surface, so the button looks disabled exactly when it is being pointed at.'
+          : `Hover must make the control more emphatic, by at least ${HOVER_MIN_STEP}x.`),
+    );
+  }
+}
+
+/* ── #31: elevation is a model, not four independent choices ───────────────
+ *
+ * Upstream DSH's own layers are monotone in lightness (dark: 19.7 / 25.7 /
+ * 29.4 / 33.3). This theme deliberately inverts that for nesting — `bg-layer-2`
+ * is documented in L3 as "the sunken sidebar" — so the rule here is the
+ * theme's own, and it has to hold in every palette or it is not a model:
+ *
+ *   layer-1  raised   (lighter than the ground: a card)
+ *   layer-2  recessed (darker: a well inside the page)
+ *   layer-3  recessed further than layer-2 (nesting goes deeper, not shallower)
+ *   skeleton tracks layer-3 (it is the same surface, pre-content)
+ *
+ * 青夜 shipped layer-3 at EXACTLY the ground's lightness — so it painted
+ * nothing while being read by 21 stylesheets — and 斑斓 shipped it lighter than
+ * the ground, breaking the direction entirely.
+ */
+let elevationAssertions = 0;
+for (const { id: themeName, tokens } of PALETTES) {
+  const base = oklab(tokens['--dsw-alias-bg-base'], tokens['--dsw-alias-bg-base']).L;
+  const d = (name) => (oklab(tokens['--dsw-alias-' + name], tokens['--dsw-alias-bg-base']).L - base) * 100;
+  const [d1, d2, d3] = [d('bg-layer-1'), d('bg-layer-2'), d('bg-layer-3')];
+  elevationAssertions += 1;
+  if (!(d1 > 0)) {
+    failures.push(`#31 ${themeName}: bg-layer-1 is ${d1.toFixed(1)} L* from bg-base — a card must be raised`);
+  }
+  elevationAssertions += 1;
+  if (!(d2 < 0)) {
+    failures.push(`#31 ${themeName}: bg-layer-2 is ${d2.toFixed(1)} L* from bg-base — the well must be recessed`);
+  }
+  elevationAssertions += 1;
+  if (!(d3 < d2)) {
+    failures.push(
+      `#31 ${themeName}: bg-layer-3 is ${d3.toFixed(1)} L* from bg-base but bg-layer-2 is ${d2.toFixed(1)} — ` +
+        'nesting must go deeper, not shallower' +
+        (Math.abs(d3) < 0.5 ? ' (this level paints nothing at all: it IS the ground)' : ''),
+    );
+  }
+  elevationAssertions += 1;
+  if (tokens['--dsw-alias-bg-skeleton'] !== tokens['--dsw-alias-bg-layer-3']) {
+    failures.push(
+      `#31 ${themeName}: bg-skeleton is ${tokens['--dsw-alias-bg-skeleton']} but bg-layer-3 is ` +
+        `${tokens['--dsw-alias-bg-layer-3']} — the skeleton is the same surface before content arrives, ` +
+        'and every other palette keeps them equal',
+    );
+  }
+}
+
+/* ── #32: link ink and error ink must be told apart ────────────────────────
+ *
+ * This one is RECORDED, not thresholded, and the distinction is deliberate.
+ * Measured with WCAG contrast the pair looks fine (珊瑚's link is 5.59:1 on the
+ * ground); measured with perceptual distance 珊瑚's link and its error ink are
+ * delta-E 0.019 apart — the same colour. 青夜 measures 0.030. The other two
+ * separate them by hue family (a blue link against a red error) and measure
+ * 0.208 and 0.228.
+ *
+ * A threshold here would be dishonest in both directions. There is no
+ * principled value below which a reader is confused; and the collision is not
+ * fixable by moving the error hue, because 珊瑚's link ink IS its coral accent
+ * darkened to AA, which lands in the same dark-red region the error occupies.
+ * Searching the red band for the most separated error reaches only 0.080.
+ * Fixing it properly means giving the palette a non-coral link — a design
+ * decision, not a repair.
+ *
+ * So the numbers are pinned. A palette may sit at 0.019, but it may not do so
+ * SILENTLY: any edit that moves the separation is caught here and has to be
+ * re-recorded, which is the point. `--verbose` prints the whole table.
+ */
+const LINK_ERROR_SEPARATION = {
+  'hana-paper': 0.208,
+  'hana-midnight': 0.03,
+  'hana-coral': 0.019,
+  'hana-midnight-vivid': 0.228,
+};
+const SEPARATION_TOLERANCE = 0.02;
+let separationAssertions = 0;
+for (const { id: themeName, tokens } of PALETTES) {
+  separationAssertions += 1;
+  if (!(themeName in LINK_ERROR_SEPARATION)) {
+    failures.push(
+      `#32 ${themeName} has no recorded link/error separation — measure ` +
+        'deltaE(state-business-primary, state-error-primary) and record it, so the value is a decision ' +
+        'rather than an accident',
+    );
+    continue;
+  }
+  const measured = deltaE(
+    tokens['--dsw-alias-state-business-primary'],
+    tokens['--dsw-alias-state-error-primary'],
+    tokens['--dsw-alias-bg-base'],
+  );
+  const recorded = LINK_ERROR_SEPARATION[themeName];
+  if (Math.abs(measured - recorded) > SEPARATION_TOLERANCE) {
+    failures.push(
+      `#32 ${themeName}: link and error ink are delta-E ${measured.toFixed(3)} apart, but ` +
+        `${recorded.toFixed(3)} is recorded — an unrecorded change to how distinguishable they are` +
+        (measured < 0.05 ? ' (this is a near-match: the two inks are effectively the same colour)' : ''),
+    );
+  }
+}
+
 /* ── report ─────────────────────────────────────────────────────────────── */
 
 if (process.argv.includes('--verbose')) {
@@ -432,7 +564,10 @@ const assertions =
   grainAssertions +
   syntaxAssertions +
   1 + // #28, the seal reuses an asserted pair
-  rampAssertions;
+  rampAssertions +
+  hoverAssertions +
+  elevationAssertions +
+  separationAssertions;
 if (failures.length) {
   console.error(`contrast: ${failures.length} FAILED of ${assertions} assertions\n`);
   for (const f of failures) console.error('  ✗ ' + f);
@@ -442,5 +577,6 @@ console.log(
   `contrast: ${assertions} assertions pass (${PAIRS.length} pairs x ${Object.keys(THEMES).length} palettes ` +
     `+ ${polarityAssertions} polarity + 2 link band + 1 soft-light neutrality + ${grainAssertions} grain-composite ` +
     `+ ${syntaxAssertions} syntax: ${SYNTAX_TOKENS.length} tokens x ${PALETTES.length} palettes + ${PALETTES.length} spread ` +
-    `+ 1 seal-pair + ${rampAssertions} ink-ramp shape)`,
+    `+ 1 seal-pair + ${rampAssertions} ink-ramp shape + ${hoverAssertions} hover direction ` +
+    `+ ${elevationAssertions} elevation model + ${separationAssertions} recorded link/error separation)`,
 );
