@@ -27,25 +27,29 @@
       "id": "hana-paper",
       "name": "花笺 · 纸本",
       "colorScheme": "light",
-      "accent": "#537D96"
+      "accent": "#537D96",
+      "preview": "assets/paper.webp"
     },
     {
       "id": "hana-midnight",
       "name": "花笺 · 青夜",
       "colorScheme": "dark",
-      "accent": "#C99AAF"
+      "accent": "#C99AAF",
+      "preview": "assets/midnight.webp"
     },
     {
       "id": "hana-coral",
       "name": "花笺 · 珊瑚",
       "colorScheme": "light",
-      "accent": "#F37E63"
+      "accent": "#F37E63",
+      "preview": "assets/coral.webp"
     },
     {
       "id": "hana-midnight-vivid",
       "name": "花笺 · 斑斓",
       "colorScheme": "dark",
-      "accent": "#E6B1C4"
+      "accent": "#E6B1C4",
+      "preview": "assets/vivid.webp"
     }
   ],
   "tokens": {

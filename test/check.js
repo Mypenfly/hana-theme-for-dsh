@@ -481,6 +481,40 @@ check(
   'package.json must export "./client" — it is how the web module roster finds the client bundle',
 );
 
+/* 27 — every preview skin.json names must exist, and every palette must have one.
+ *
+ * The shipped schema carries a single `preview: { light, dark }` pair — verified
+ * against all ten skins distributed with the reference desktop build, none of
+ * which declares a `themes[]` array at all. Four palettes cannot fit in two
+ * slots, so the pair points at the two primary ones and each `themes[]` entry
+ * carries its own: hana's own extension, since `themes[]` is hana's own
+ * extension to begin with.
+ *
+ * Without this judgement the two extra previews were simply ORPHANED — present
+ * in assets/, referenced only by the READMEs, invisible to anything reading the
+ * manifest. That is the same shape as a dead token: an artifact that looks
+ * deliberate, is documented, and is reached by nothing. */
+const allPreviews = [
+  ...Object.entries(skin.preview || {}).map(([mode, rel]) => [`preview.${mode}`, rel]),
+  ...(skin.themes || []).flatMap((t) =>
+    t.preview ? [[`themes[${t.id}].preview`, t.preview]] : [],
+  ),
+];
+check(allPreviews.length > 0, 'skin.json declares no preview images at all');
+const missingPreviews = allPreviews.filter(([, rel]) => !fs.existsSync(path.join(ROOT, rel)));
+check(
+  missingPreviews.length === 0,
+  `skin.json points at preview images that do not exist: ${missingPreviews
+    .map(([where, rel]) => `${where} -> ${rel}`)
+    .join(', ')}`,
+);
+const palettesWithoutPreview = (skin.themes || []).filter((t) => !t.preview).map((t) => t.id);
+check(
+  palettesWithoutPreview.length === 0,
+  `these palettes ship no preview, so a skin browser would show the wrong image for them: ` +
+    palettesWithoutPreview.join(', '),
+);
+
 /* 17 — the published file list must cover everything the loader reads.
  *
  * `files` decides what an npm/git install actually receives. A new runtime file
