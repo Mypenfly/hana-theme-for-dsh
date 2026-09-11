@@ -71,6 +71,7 @@ const CLIENT_TAIL = join('lib', 'client.js')
 /* ── discovery ──────────────────────────────────────────────────────────── */
 
 const safeReaddir = (p) => { try { return readdirSync(p) } catch { return [] } }
+const profilesRoot = () => join(process.env.DSH_HOME || '', 'profiles')
 const mtimeOf = (p) => { try { return statSync(p).mtimeMs } catch { return 0 } }
 
 const profileCopies = () => {
@@ -431,6 +432,81 @@ const consumedNotRegistered = [...inScope.keys()]
   .filter((n) => !registered.has(n))
   .sort()
 
+/* ── the assumption the whole supply strategy rests on ────────────────────
+ *
+ * Supplying `--dsw-alias-link` only works because the presenter writes EVERY
+ * token of the composed snapshot onto <body>, with no membership test against
+ * the registered set. That is not a documented contract — it is an
+ * implementation detail of `dsh-client-ui-layout`, and it is the single point
+ * where this whole approach would stop working: if a future version filtered
+ * the loop to registered names, the nine supplied tokens would be dropped and
+ * the failure mode is SILENT (the read falls back to no fallback, which is
+ * where this started).
+ *
+ * So the assumption is checked rather than remembered, and the result is
+ * recorded in the ledger so the offline test can refuse to rely on it when it
+ * stops holding. This cannot be verified from a declaration scan, which is why
+ * it lives beside the reference scan: both are about the half of the contract
+ * no stylesheet states.
+ */
+function presenterContract() {
+  const roots = [
+    join(profilesRoot(), 'node_modules', '@deepseek-ai'),
+    ...safeReaddir(profilesRoot()).map((n) => join(profilesRoot(), n, 'node_modules', '@deepseek-ai')),
+    ...desktopAppRoots().map((app) => join(app, 'node_modules')),
+  ]
+  const candidates = []
+  for (const root of roots) {
+    if (!existsSync(root)) continue
+    const walk = (dir, depth) => {
+      if (depth > 8) return
+      let entries
+      try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
+      for (const e of entries) {
+        const p = join(dir, e.name)
+        let isDir = e.isDirectory()
+        if (e.isSymbolicLink()) { try { isDir = statSync(p).isDirectory() } catch { continue } }
+        if (isDir) { if (depth < 2) walk(p, depth + 1); continue }
+        if (e.name === 'client.js' && /dsh-client-ui-layout/.test(p)) candidates.push(p)
+      }
+    }
+    walk(root, 0)
+  }
+  for (const file of [...new Set(candidates)]) {
+    let src
+    try { src = readFileSync(file, 'utf8') } catch { continue }
+    /* The write loop: iterate the composed tokens, set each one, remember what
+       was set so it can be removed later. The `appliedTokens` push is part of
+       the signature on purpose — it is what makes the loop the presenter's
+       rather than some unrelated style application. */
+    const m = src.match(/for \(const \[name, value\] of Object\.entries\([^)]*tokens[^)]*\)\)\s*\{[^}]{0,400}?setProperty\(name, value\)[^}]{0,400}?\}/)
+    if (!m) continue
+    const body = m[0]
+    /* …and no filter. A membership test on the registered set is exactly the
+       change that would break the supply silently. */
+    const filtered = /registered|allowed|KNOWN_TOKENS|has\(name\)|includes\(name\)/.test(body)
+    return {
+      writesEveryComposedToken: !filtered,
+      evidence: body.replace(/\s+/g, ' ').slice(0, 220),
+      foundAt: redact(file),
+      ...(filtered
+        ? {
+            note:
+              'the presenter now filters tokens before writing them, so a name outside the ' +
+              'registered set is NOT delivered — every entry in consumedNotRegistered is dead again',
+          }
+        : {}),
+    }
+  }
+  return {
+    writesEveryComposedToken: false,
+    note:
+      'could not locate the presenter loop in dsh-client-ui-layout; the assumption that ' +
+      'unregistered names reach <body> is UNVERIFIED — re-check it by hand before relying on ' +
+      'anything in consumedNotRegistered',
+  }
+}
+
 /* Counted, not required. Read from the same shared root, one level of plugin
    package deep, so the boundary is a number in the ledger rather than a
    sentence in a document. */
@@ -506,6 +582,9 @@ const payload = {
       names: outsideScope.size,
     },
   },
+  /* Recorded so test/tokens.test.js can refuse to rely on it once it stops
+     holding. Everything in `consumedNotRegistered` depends on this being true. */
+  presenterContract: presenterContract(),
 }
 
 const serialized = JSON.stringify(payload, null, 2) + '\n'

@@ -194,5 +194,10 @@
       "note": "separately installed community plugins also read --dsw-alias-* names, several of which no published contract declares. They are counted here and deliberately NOT required: a theme cannot be responsible for a contract nobody publishes.",
       "names": 1
     }
+  },
+  "presenterContract": {
+    "writesEveryComposedToken": true,
+    "evidence": "for (const [name, value] of Object.entries(snapshot.active.tokens)) { body.style.setProperty(name, value); this.appliedTokens.push(name); }",
+    "foundAt": "~/.dsh/profiles/node_modules/@deepseek-ai/dsh-client-ui-layout/lib/client.js"
   }
 }

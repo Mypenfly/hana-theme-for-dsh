@@ -107,7 +107,36 @@ for (const name of Object.keys(UNREGISTERED).sort()) {
   }
 }
 
-/* 1c — a bound alias must equal the role it names.
+/* 1d — supplying an unregistered name only works because the presenter writes
+ * every token of the composed snapshot onto <body>, with no membership test
+ * against the registered set. That is an implementation detail of
+ * dsh-client-ui-layout, not a documented contract, and it is the single point
+ * where the whole approach stops working: a version that filtered that loop
+ * would drop all nine supplied names, and the failure would be SILENT — the
+ * reads fall back to no fallback, which is the state this started from.
+ *
+ * tools/refresh-allowlist.mjs locates the loop and records whether it filters.
+ * The prerequisite is asserted here rather than assumed, so the strategy cannot
+ * outlive its precondition without the build saying so.
+ */
+const suppliesUnregistered = PALETTES.some((p) => Object.keys(p.tokens).some((n) => !allowed.has(n)));
+if (suppliesUnregistered) {
+  const contract = allowlist.presenterContract;
+  check(
+    contract !== undefined,
+    'this theme supplies token names outside the registered set, but token-allowlist.json ' +
+      'records no presenterContract — re-run `npm run refresh:allowlist` so the assumption that ' +
+      'unregistered names reach <body> is verified rather than remembered',
+  );
+  check(
+    contract === undefined || contract.writesEveryComposedToken === true,
+    'this theme supplies token names outside the registered set, but the presenter loop in ' +
+      `dsh-client-ui-layout NO LONGER writes every composed token (${contract?.note || 'no reason recorded'}) ` +
+      '— every supplied name outside the 89 is dead again, and silently',
+  );
+}
+
+/* 1e — a bound alias must equal the role it names.
  *
  * lib/client.js derives each unregistered name from a role the palette already
  * defines, so there is no second value to keep in step. Restating that map here

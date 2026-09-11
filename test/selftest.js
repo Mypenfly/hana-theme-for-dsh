@@ -213,6 +213,15 @@ const MUTATIONS = [
     find: '      "--dsw-alias-bg-layer-3": "#303E47",\n',
     replace: '      "--dsw-alias-bg-layer-3": "#3C4A52",\n',
   },
+  {
+    id: 'presenter-contract-broken',
+    why: 'records the one change that would silently undo the whole supply strategy: if dsh-client-ui-layout filtered its write loop by the registered set, all nine names outside the 89 would stop reaching <body>, and every read of them would go back to resolving to nothing',
+    suite: 'tokens',
+    marker: 'NO LONGER writes every composed token',
+    file: 'test/token-allowlist.json',
+    find: '    "writesEveryComposedToken": true,',
+    replace: '    "writesEveryComposedToken": false,',
+  },
 ];
 
 const verbose = process.argv.includes('--verbose');
