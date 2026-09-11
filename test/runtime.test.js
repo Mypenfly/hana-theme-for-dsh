@@ -557,6 +557,69 @@ section('13 — the seal obeys the quiet-install promise');
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   14 — the paper texture is vetoed in the dark palettes
+   ═══════════════════════════════════════════════════════════════════════════
+   HanaAgent does not restyle its grain for dark themes, it does not apply it:
+   `paperTextureBlockedThemeIds: ["midnight", "midnight-contrast"]` in its
+   registry, `isPaperTextureEffectivelyEnabled = enabled && !blocked`, and the
+   settings switch rendered DISABLED with the hint
+   「黑夜模式不支持纸质纹理，切回浅色主题后会按原设置恢复」.
+
+   That last clause is the one worth testing, because it is the one a careless
+   implementation breaks: the obvious way to "turn the texture off in dark mode"
+   is to write 0 into the preference, which silently destroys the user's choice.
+   So this section asserts the attribute, the switch, AND that the stored value
+   survives. */
+section('14 — the paper texture veto');
+{
+  const env = createEnvironment();
+  env.assertLive();
+  env.apply();
+
+  /* A light palette keeps it, at the shipped default (ON). */
+  env.claimPalette('hana-paper');
+  ok(env.document.body._attrs()['data-hana-texture'] === 'on', 'a light palette did not get the paper grain');
+  const textureSwitch = () => env.controls().get('纸质纹理');
+  ok(
+    textureSwitch() && textureSwitch().props.disabled !== true,
+    'the paper-texture switch is disabled on a light palette',
+  );
+
+  /* A dark palette vetoes it -- and disables the switch rather than pretending
+     the user's setting is off. */
+  env.claimPalette('hana-midnight');
+  ok(
+    env.document.body._attrs()['data-hana-texture'] === 'off',
+    'a dark palette still carried the paper grain; HanaAgent blocks the texture outright in its dark themes',
+  );
+  ok(textureSwitch().props.disabled === true, 'the paper-texture switch stayed enabled on a dark palette');
+  ok(textureSwitch().props.checked === false, 'the paper-texture switch did not render as off while vetoed');
+  ok(env.panelText().includes('黑夜模式不支持纸质纹理'), 'the panel does not explain why the switch is disabled');
+
+  /* The preference itself must be untouched. That is not asserted by reading the
+     store -- it is asserted by its CONSEQUENCE, below: a veto that wrote 0 into
+     the preference would leave the grain off when a light palette came back,
+     which is exactly the promise in the hint ("切回浅色主题后会按原设置恢复"). */
+  env.claimPalette('hana-coral');
+  ok(
+    env.document.body._attrs()['data-hana-texture'] === 'on',
+    'the grain did not come back when a light palette was reclaimed -- so the veto wrote to the stored ' +
+      'preference instead of only withholding the attribute, and the panel\'s promise is false',
+  );
+
+  /* And a user who turned it off still has it off after a round trip through a
+     dark palette -- the veto must not resurrect it either. */
+  env.toggle('纸质纹理');
+  ok(env.document.body._attrs()['data-hana-texture'] === 'off', 'switching the grain off did not reach the DOM');
+  env.claimPalette('hana-midnight-vivid');
+  env.claimPalette('hana-paper');
+  ok(
+    env.document.body._attrs()['data-hana-texture'] === 'off',
+    'a round trip through a dark palette switched the grain back on behind the user',
+  );
+}
+
 /* ── report ─────────────────────────────────────────────────────────────── */
 
 if (failures) {

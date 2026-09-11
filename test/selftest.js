@@ -94,7 +94,7 @@ const MUTATIONS = [
     /* Caught EARLIER than section 3, by assertLive(): the harness notices the
        plugin stopped doing its core job before any behavioural section runs. */
     marker: 'expected 11 inline syntax properties',
-    find: '        applyShiki(active === null ? stored : active);\n',
+    find: '        applyShiki(claimant);\n',
     replace: '',
   },
   {
@@ -418,6 +418,58 @@ const MUTATIONS = [
     replace: '      "  outline: 1px solid var(--hana-ring);",\n',
   },
   {
+    id: 'paper-texture-not-vetoed-in-dark',
+    why: "drops the scheme veto from the texture attribute, so 青夜 and 斑斓 carry the paper grain. HanaAgent does not restyle its grain for dark themes, it does not apply it at all (paperTextureBlockedThemeIds), and the user-visible half is that the settings switch is disabled rather than silently off",
+    suite: 'runtime',
+    marker: 'still carried the paper grain',
+    find: 'prefs.isOn("paperTexture") && textureAllowed(claimant)',
+    replace: 'prefs.isOn("paperTexture")',
+  },
+  {
+    id: 'texture-veto-writes-the-preference',
+    why: "does what a careless implementation does instead of withholding the attribute: writes 0 into the stored preference (guarded on the current value, so it converges rather than re-entering reconcile forever -- the unguarded version is a runaway, which the harness reports as INCONCLUSIVE and which is its own lesson). The grain DOES stop, which is why this looks like it works -- and the user's choice is destroyed, so it never comes back when they return to a light palette, which is the exact promise the panel's hint makes",
+    suite: 'runtime',
+    marker: 'did not come back when a light palette was reclaimed',
+    find: 'body.setAttribute(TEXTURE_ATTR, prefs.isOn("paperTexture") && textureAllowed(claimant) ? "on" : "off");',
+    replace:
+      'body.setAttribute(TEXTURE_ATTR, prefs.isOn("paperTexture") && textureAllowed(claimant) ? "on" : "off");\n' +
+      '        if (!textureAllowed(claimant) && prefs.isOn("paperTexture")) prefs.set("paperTexture", "0");',
+  },
+  {
+    id: 'grain-svg-shape-changed-silently',
+    why: 'changes the grain\'s frequency without touching the record of it. The comment above the SVG explains that the layer is luminance-neutral BECAUSE fractalNoise is symmetric about 0.5, and a grain that changed shape under a comment that did not is the silent kind',
+    suite: 'grain',
+    marker: 'but this tool records',
+    find: "baseFrequency='0.64'",
+    replace: "baseFrequency='0.38'",
+  },
+  {
+    id: 'grain-blend-made-normal',
+    why: 'swaps soft-light for a normal composite. That is the reference\'s own mechanism, and porting it WITHOUT the compensation plate that goes with it is exactly the mistake the three-layer analysis exists to prevent: the grain starts darkening the page, at which point layer ③ stops being unnecessary',
+    suite: 'grain',
+    marker: 'does not use mix-blend-mode: soft-light',
+    find: 'mix-blend-mode: soft-light',
+    replace: 'mix-blend-mode: normal',
+  },
+  {
+    id: 'grain-noise-no-longer-symmetric',
+    why: 'swaps fractalNoise for turbulence. Both are valid feTurbulence types and both look like noise, but only fractalNoise is distributed symmetrically about 0.5 -- turbulence is |noise|, which sits below mid-grey, so under soft-light the layer would DARKEN the page. The comment above the SVG names this as one of the two facts neutrality rests on; this mutation proves the other one is checked too',
+    suite: 'grain',
+    marker: 'not fractalNoise',
+    find: "type='fractalNoise'",
+    replace: "type='turbulence'",
+  },
+  {
+    id: 'grain-rule-no-longer-palette-keyed',
+    why: 'unkeys the grain rule from the palettes. The client writes data-hana-theme and data-hana-texture in the same pass one after the other, so an unkeyed rule renders a dark palette with grain if the pass throws between them -- which is the whole reason the veto is expressed twice',
+    suite: 'grain',
+    marker: 'is not keyed on a palette',
+    find:
+      '      "body[" + BODY_ATTR + "=\'paper\'][" + TEXTURE_ATTR + "=\'on\']::after,",\n' +
+      '      "body[" + BODY_ATTR + "=\'coral\'][" + TEXTURE_ATTR + "=\'on\']::after {",\n',
+    replace: '      "body[" + BODY_ATTR + "][" + TEXTURE_ATTR + "=\'on\']::after {",\n',
+  },
+  {
     id: 'palette-keyed-rule-names-a-ghost-palette',
     why: "misspells the palette attribute value ('corral'). The first version of judgement 8 tested the literal prefix `body[data-hana-theme]`, which would have waved this through while rejecting a correct palette-keyed rule — the rule never matches, and 珊瑚 silently falls back to the generic ring, i.e. to the coral it was keyed there to avoid",
     suite: 'check',
@@ -438,6 +490,7 @@ const SUITES = {
   wash: [path.join(ROOT, 'tools', 'derive-wash.mjs'), '--check'],
   glass: [path.join(ROOT, 'tools', 'derive-glass.mjs'), '--check'],
   focus: [path.join(ROOT, 'tools', 'derive-focus.mjs'), '--check'],
+  grain: [path.join(ROOT, 'tools', 'derive-grain.mjs'), '--check'],
 };
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'hana-selftest-'));
 

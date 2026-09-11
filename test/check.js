@@ -905,6 +905,62 @@ const focusSel = "body[" + "data-hana-theme" + "][" + "data-hana-focus" + "='acc
   }
 }
 
+/* ── the 纸纹暗色否决 ───────────────────────────────────────────────────
+ *
+ * HanaAgent does not restyle its paper grain for dark themes, it does not apply
+ * it: `paperTextureBlockedThemeIds: ["midnight", "midnight-contrast"]` lives in
+ * its registry, `isPaperTextureEffectivelyEnabled = enabled && !blocked`, and
+ * the settings switch is rendered disabled with the hint
+ * 「黑夜模式不支持纸质纹理，切回浅色主题后会按原设置恢复」 -- a hint that makes a
+ * promise about the STORED preference, which is the part an implementation can
+ * break without anyone noticing until the user switches back.
+ *
+ * tools/derive-grain.mjs checks what the veto DOES (it runs the shipped
+ * predicate against the shipped palette table, and checks the CSS keying).
+ * These judgements are the source-level half it cannot see.
+ */
+{
+  check(
+    /function textureAllowed\(/.test(source),
+    'lib/client.js has no textureAllowed(), so nothing vetoes the paper grain in the dark palettes',
+  );
+  check(
+    /TEXTURE_ATTR,\s*prefs\.isOn\("paperTexture"\)\s*&&\s*textureAllowed\(/.test(source),
+    'the texture attribute is not gated on textureAllowed(); the veto would exist and never be consulted',
+  );
+  check(
+    /textureAllowed\(claimant\)/.test(source),
+    'the veto is not applied to the SAME palette the body attribute is written from. Reading the claimant ' +
+      'twice from two expressions is how the two could ever disagree on screen.',
+  );
+
+  /* The reference's promise, as an invariant rather than a comment: nothing may
+     write this preference EXCEPT the generic settings toggle. A veto that does
+     `prefs.set("paperTexture", "0")` looks like it works -- the grain does stop
+     -- and silently destroys the user's choice, so the grain never comes back
+     when they return to a light palette. */
+  const directWrites = [...source.matchAll(/prefs\.set\(\s*["']paperTexture["']/g)].length;
+  check(
+    directWrites === 0,
+    `the paperTexture preference is written directly in ${directWrites} place(s). The veto must withhold the ` +
+      'ATTRIBUTE, not the preference: HanaAgent\'s hint promises 「切回浅色主题后会按原设置恢复」, and a write ' +
+      'here is what makes that promise false.',
+  );
+
+  /* And the switch must be disabled, not merely off: the difference is the
+     user's whole understanding of whether their switch is broken or
+     inapplicable. */
+  check(
+    /disabled:\s*textureBlocked/.test(source),
+    'the paper-texture switch is not disabled while vetoed; HanaAgent disables it (InterfaceTab passes ' +
+      '`on={blocked ? false : enabled} disabled={blocked}`) rather than showing a switch that does nothing',
+  );
+  check(
+    source.includes('黑夜模式不支持纸质纹理'),
+    'the panel does not carry the hint that explains the veto',
+  );
+}
+
 /* ── the geometry ledger, validated OFFLINE ─────────────────────────────
  *
  * tools/scan-geometry.mjs --check regenerates the ledger from the installed
